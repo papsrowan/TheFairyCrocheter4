@@ -71,15 +71,22 @@ services:
           cpus: '0.25'
           memory: 512M
 
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUMES - Utilisation des volumes de l'ancien projet (thefairycrocheterupdated)
+# ─────────────────────────────────────────────────────────────────────────────
 volumes:
   db-data:
-    driver: local
+    name: thefairycrocheterupdated_db-data
+    external: true
   app-uploads:
-    driver: local
+    name: thefairycrocheterupdated_app-uploads
+    external: true
   app-documents:
-    driver: local
+    name: thefairycrocheterupdated_app-documents
+    external: true
   app-logs:
-    driver: local
+    name: thefairycrocheterupdated_app-logs
+    external: true
 
 networks:
   fairy-net:
