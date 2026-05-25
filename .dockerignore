@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — Exclure les fichiers inutiles du contexte de build Docker
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Dépendances Node (reconstruites dans le container)
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+.next
+out
+build
+dist
+*.tsbuildinfo
+
+# Environnement local (ne JAMAIS envoyer dans l'image)
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test.local
+# On garde .env.production car il est monté en volume sur le VPS, pas copié
+
+# Outils Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Éditeurs et IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Tests
+__tests__
+*.test.ts
+*.spec.ts
+jest.config.*
+playwright.config.ts
+coverage
+
+# Documentation
+README.md
+*.md
+docs
+
+# CI/CD
+.gitlab-ci.yml
+.circleci
+.travis.yml
+
+# Divers
+.claude
+.terraform
+terraform.tfstate*
+docker/Dockerfile.*

@@ -1,0 +1,19 @@
+# Normalisation automatique des fins de ligne
+* text=auto eol=lf
+
+# Forcer LF pour les fichiers source
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+*.prisma text eol=lf
+
+# Fichiers binaires — pas de conversion
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary

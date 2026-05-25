@@ -1,0 +1,13 @@
+# Override local — utilisé uniquement sur le PC de développement
+# Commande : docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+
+services:
+  app:
+    pull_policy: build
+    ports:
+      - "3002:3000"          # accessible sur http://localhost:3002
+    environment:
+      AUTH_URL:              http://localhost:3002
+      NEXTAUTH_URL:          http://localhost:3002
+      NEXT_PUBLIC_APP_URL:   http://localhost:3002
+      DOCUMENTS_BASE_URL:    http://localhost:3002/documents

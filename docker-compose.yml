@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — TheFairyCrocheter
+# Services: PostgreSQL 16 + Next.js App
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Base de données ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: fairy-crocheter-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fairycrocheter}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fairycrocheter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fairy-net
+
+  # ── Application Next.js ──────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: thefairycrocheter:latest
+    container_name: fairy-crocheter-app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      AUTO_SEED: ${AUTO_SEED:-true}
+      # DATABASE_URL construit depuis les vars DB — toujours pointer vers le service 'db'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@db:5432/${POSTGRES_DB:-fairycrocheter}?schema=public
+      # Chemin documents aligné sur le volume monté ci-dessous
+      DOCUMENTS_STORAGE_PATH: /app/documents
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Nginx écoute sur l'extérieur et proxy vers ce port en interne
+      - "127.0.0.1:${APP_PORT:-3001}:3000"
+    volumes:
+      - app-uploads:/app/public/uploads
+      - app-documents:/app/documents
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - fairy-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+volumes:
+  db-data:
+    driver: local
+  app-uploads:
+    driver: local
+  app-documents:
+    driver: local
+  app-logs:
+    driver: local
+
+networks:
+  fairy-net:
+    driver: bridge
