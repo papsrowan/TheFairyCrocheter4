@@ -35,11 +35,57 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Données invalides", details: parsed.error.flatten() }, { status: 422 });
   }
 
-  const { type, quantite, motif, nouveauStock } = parsed.data;
+  const { type, quantite, motif, nouveauStock, varianteId } = parsed.data;
 
   const produit = await prisma.produit.findUnique({ where: { id } });
   if (!produit) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
   if (!produit.actif) return NextResponse.json({ error: "Produit archivé" }, { status: 422 });
+
+  // ── Produit multi-couleur : ajuster la variante ET garder le stock global cohérent ──
+  if (varianteId) {
+    const variante = await prisma.varianteProduit.findUnique({ where: { id: varianteId } });
+    if (!variante || variante.produitId !== id) {
+      return NextResponse.json({ error: "Variante introuvable" }, { status: 404 });
+    }
+    const vAvant = variante.stockActuel;
+    let vApres: number;
+    switch (type) {
+      case "ENTREE":          vApres = vAvant + quantite; break;
+      case "SORTIE_MANUELLE": vApres = vAvant - quantite; break;
+      case "CORRECTION":      vApres = vAvant + quantite; break;
+      case "INVENTAIRE":
+        if (nouveauStock === undefined) return NextResponse.json({ error: "nouveauStock requis pour un inventaire" }, { status: 422 });
+        vApres = nouveauStock; break;
+      default: return NextResponse.json({ error: "Type invalide" }, { status: 422 });
+    }
+    if (vApres < 0) return NextResponse.json({ error: `Stock couleur insuffisant. Disponible : ${vAvant}` }, { status: 422 });
+
+    const delta  = vApres - vAvant;
+    const pAvant = produit.stockActuel;
+    const pApres = pAvant + delta;          // le global suit le delta → reste = somme des couleurs
+    const qteMvt = Math.abs(delta);
+    const motifC = `${motif ?? "Ajustement"} — couleur ${variante.couleur}`;
+
+    const [, , , globalMvt] = await prisma.$transaction([
+      prisma.varianteProduit.update({ where: { id: varianteId }, data: { stockActuel: vApres } }),
+      prisma.produit.update({ where: { id }, data: { stockActuel: pApres } }),
+      // mouvement couleur (historique par variante)
+      prisma.mouvementStock.create({ data: {
+        produitId: id, varianteId, type, quantite: qteMvt,
+        stockAvant: vAvant, stockApres: vApres, motif: motifC, userId: session.user.id,
+      }}),
+      // mouvement global (alimente Total entrées/sorties + stockActuel)
+      prisma.mouvementStock.create({ data: {
+        produitId: id, type, quantite: qteMvt,
+        stockAvant: pAvant, stockApres: pApres, motif: motifC, userId: session.user.id,
+      }}),
+    ]);
+
+    emitSSE("stock.updated", { produitId: id, stockActuel: pApres, type });
+    await audit({ userId: session.user.id, action: AUDIT_ACTIONS.STOCK_ADJUSTED, entityId: id, entityType: "produit",
+      details: { type, quantite: qteMvt, varianteId, couleur: variante.couleur, stockAvant: pAvant, stockApres: pApres, motif } });
+    return NextResponse.json({ mouvement: globalMvt, stockActuel: pApres });
+  }
 
   const stockAvant = produit.stockActuel;
   let stockApres: number;

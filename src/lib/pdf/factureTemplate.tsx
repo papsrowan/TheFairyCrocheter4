@@ -128,6 +128,7 @@ export interface FacturePDFProps {
     id: string;
     numero: string;
     createdAt: Date | string;
+    dateFacture?: Date | string | null;
     sousTotal: number;
     montantTVA: number;
     remiseGlobale: number;
@@ -189,7 +190,7 @@ function formatCurrencyPDF(amount: number): string {
   return new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount) + " XAF";
+  }).format(amount).replace(/[   ]/g, " ") + " XAF";
 }
 
 function formatDatePDF(date: Date | string): string {
@@ -229,7 +230,7 @@ export function FacturePDF({ vente, entreprise }: FacturePDFProps) {
             <Text style={styles.invoiceTitle}>FACTURE</Text>
             <Text style={styles.invoiceNumber}>{vente.numero}</Text>
             <Text style={styles.invoiceDate}>
-              Émise le {formatDatePDF(vente.createdAt)}
+              Émise le {formatDatePDF(vente.dateFacture ?? vente.createdAt)}
             </Text>
           </View>
         </View>

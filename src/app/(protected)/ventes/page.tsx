@@ -238,7 +238,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
                         {vente.numero}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
-                        {formatDateTime(vente.createdAt)}
+                        {formatDateTime(vente.dateFacture ?? vente.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-sm hidden md:table-cell">
                         {vente.client

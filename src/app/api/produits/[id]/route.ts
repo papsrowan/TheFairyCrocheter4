@@ -117,6 +117,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           data: vars.map(v => ({
             produitId:   id,
             couleur:     v.couleur,
+            description: v.description ?? null,
             stockActuel: v.stockActuel,
           })),
         });

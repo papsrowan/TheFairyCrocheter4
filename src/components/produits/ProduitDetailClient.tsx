@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import StockAjustementModal from "./StockAjustementModal";
 
+interface VarianteOpt { id: string; couleur: string; description?: string | null; stockActuel: number }
+
 interface ProduitDetailClientProps {
   produitId:    string;
   produitNom:   string;
@@ -13,10 +15,11 @@ interface ProduitDetailClientProps {
   canStock:     boolean;
   canDelete:    boolean;
   isSuperAdmin: boolean;
+  variantes?:   VarianteOpt[];
 }
 
 export default function ProduitDetailClient({
-  produitId, produitNom, stockActuel, stockMinimum, actif, canStock, canDelete, isSuperAdmin,
+  produitId, produitNom, stockActuel, stockMinimum, actif, canStock, canDelete, isSuperAdmin, variantes = [],
 }: ProduitDetailClientProps) {
   const router = useRouter();
   const [showModal, setShowModal]     = useState(false);
@@ -156,6 +159,7 @@ export default function ProduitDetailClient({
           produitId={produitId}
           produitNom={produitNom}
           stockActuel={currentStock}
+          variantes={variantes}
           onSuccess={handleStockSuccess}
           onClose={() => setShowModal(false)}
         />

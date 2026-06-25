@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       stockMinimum: true,
       imageUrl: true,
       categorie:  { select: { nom: true } },
-      variantes:  { select: { id: true, couleur: true, stockActuel: true }, orderBy: { couleur: "asc" } },
+      variantes:  { select: { id: true, couleur: true, description: true, stockActuel: true }, orderBy: { couleur: "asc" } },
     },
     orderBy: [
       { stockActuel: "desc" }, // Produits en stock d'abord

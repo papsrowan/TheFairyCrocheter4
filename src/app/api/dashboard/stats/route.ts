@@ -36,25 +36,34 @@ export async function GET(req: NextRequest) {
 
   const canFinances = hasPermission(role, "dashboard:finances");
 
+  // Le CA est basé sur les ENCAISSEMENTS réels (écritures), pas sur le total des
+  // ventes : ainsi un crédit n'entre dans le CA qu'au fur et à mesure de ses
+  // règlements, et les annulations/remboursements (négatifs) sont déjà nets.
+  const CA_TYPES = ["RECETTE_VENTE", "REMBOURSEMENT"] as const;
+
   const [
-    ventesAujourdhui,
-    ventesHier,
+    nbVentesAujourdhui,
+    nbVentesHier,
+    caAujourdhuiAgg,
+    caHierAgg,
     produitsAlertes,
     clientsActifs,
     ventesRecentes,
-    caParJourRaw,
+    recettes7j,
   ] = await Promise.all([
-    // Ventes d'aujourd'hui
-    prisma.vente.aggregate({
-      where: { createdAt: { gte: debutJour }, statut: "COMPLETEE" },
-      _count: true,
-      _sum:   { total: true },
+    // Nombre de ventes du jour (annulées déjà exclues via statut)
+    prisma.vente.count({ where: { createdAt: { gte: debutJour }, statut: "COMPLETEE" } }),
+    // Nombre de ventes d'hier
+    prisma.vente.count({ where: { createdAt: { gte: debutHier, lte: finHier }, statut: "COMPLETEE" } }),
+    // CA encaissé aujourd'hui
+    prisma.ecritureFinanciere.aggregate({
+      where: { type: { in: [...CA_TYPES] }, date: { gte: debutJour } },
+      _sum: { montant: true },
     }),
-    // Ventes d'hier
-    prisma.vente.aggregate({
-      where: { createdAt: { gte: debutHier, lte: finHier }, statut: "COMPLETEE" },
-      _count: true,
-      _sum:   { total: true },
+    // CA encaissé hier
+    prisma.ecritureFinanciere.aggregate({
+      where: { type: { in: [...CA_TYPES] }, date: { gte: debutHier, lte: finHier } },
+      _sum: { montant: true },
     }),
     // Produits en alerte de stock
     prisma.produit.findMany({
@@ -90,50 +99,43 @@ export async function GET(req: NextRequest) {
         vendeur: { select: { nom: true, prenom: true } },
       },
     }),
-    // CA par jour sur les 7 derniers jours (brut SQL pour performance)
-    prisma.$queryRaw<Array<{ jour: Date; total: number; nb: bigint }>>`
-      SELECT
-        DATE_TRUNC('day', created_at) AS jour,
-        SUM(total)::float              AS total,
-        COUNT(*)::bigint               AS nb
-      FROM ventes
-      WHERE created_at >= ${il7Jours}
-        AND statut = 'COMPLETEE'
-      GROUP BY DATE_TRUNC('day', created_at)
-      ORDER BY jour ASC
-    `,
+    // Encaissements des 7 derniers jours (regroupés en JS par jour)
+    prisma.ecritureFinanciere.findMany({
+      where: { type: { in: [...CA_TYPES] }, date: { gte: il7Jours } },
+      select: { date: true, montant: true },
+    }),
   ]);
 
   // Filtrer les produits réellement en alerte
   const alertes = produitsAlertes.filter((p) => p.stockActuel < p.stockMinimum);
 
-  // Construire la série 7 jours (inclure les jours sans vente à 0)
+  // Construire la série 7 jours à partir des encaissements (jours sans CA = 0)
   const caParJour: Array<{ date: string; total: number; nb: number }> = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date(debutJour.getTime() - i * 86_400_000);
     const dateStr = date.toISOString().split("T")[0];
-    const row = caParJourRaw.find(
-      (r) => new Date(r.jour).toISOString().split("T")[0] === dateStr
+    const dayItems = recettes7j.filter(
+      (r) => r.date.toISOString().split("T")[0] === dateStr
     );
     caParJour.push({
       date:  dateStr,
-      total: row?.total ?? 0,
-      nb:    row ? Number(row.nb) : 0,
+      total: dayItems.reduce((s, r) => s + r.montant, 0),
+      nb:    dayItems.filter((r) => r.montant > 0).length,
     });
   }
 
-  // % évolution CA aujourd'hui vs hier
-  const caAujourdhui = ventesAujourdhui._sum.total ?? 0;
-  const caHier       = ventesHier._sum.total ?? 0;
+  // CA = encaissements nets (recettes + remboursements négatifs)
+  const caAujourdhui = caAujourdhuiAgg._sum.montant ?? 0;
+  const caHier       = caHierAgg._sum.montant ?? 0;
   const evolutionCA  = caHier > 0 ? ((caAujourdhui - caHier) / caHier) * 100 : null;
 
   return NextResponse.json({
     ventesAujourdhui: {
-      count: ventesAujourdhui._count,
+      count: nbVentesAujourdhui,
       total: caAujourdhui,
     },
     ventesHier: {
-      count: ventesHier._count,
+      count: nbVentesHier,
       total: caHier,
     },
     evolutionCA,

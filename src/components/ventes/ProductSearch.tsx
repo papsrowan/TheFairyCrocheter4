@@ -14,7 +14,7 @@ import { Search, Barcode, Package, AlertTriangle, Loader2, X } from "lucide-reac
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getOfflineDB } from "@/lib/offline/db";
 
-interface VarianteCouleur { id: string; couleur: string; stockActuel: number; }
+interface VarianteCouleur { id: string; couleur: string; description?: string | null; stockActuel: number; }
 
 function varianteKey(produitId: string, varianteId?: string | null) {
   return varianteId ? `${produitId}__${varianteId}` : produitId;
@@ -267,10 +267,17 @@ export function ProductSearch() {
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span className="w-5 h-5 rounded-full border-2 border-white shadow-sm shrink-0"
                                   style={{ backgroundColor: v.couleur }} />
-                                <span className="text-sm font-medium truncate">{v.couleur}</span>
-                                <span className={cn("text-xs shrink-0", overStock ? "text-destructive font-bold" : "text-muted-foreground")}>
-                                  {qte > 0 && overStock ? `max ${v.stockActuel}` : `${v.stockActuel} dispo`}
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium truncate">{v.couleur}</span>
+                                    <span className={cn("text-xs shrink-0", overStock ? "text-destructive font-bold" : "text-muted-foreground")}>
+                                      {qte > 0 && overStock ? `max ${v.stockActuel}` : `${v.stockActuel} dispo`}
+                                    </span>
+                                  </div>
+                                  {v.description && (
+                                    <p className="text-xs text-muted-foreground truncate" title={v.description}>{v.description}</p>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <button

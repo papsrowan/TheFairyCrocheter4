@@ -40,6 +40,10 @@ export async function POST(req: NextRequest) {
   if (!body.venteId || !body.type || !body.motif?.trim())
     return NextResponse.json({ error: "venteId, type et motif requis" }, { status: 422 });
 
+  // Le remboursement n'est plus une opération supportée
+  if (!["ANNULATION", "MODIFICATION"].includes(body.type))
+    return NextResponse.json({ error: "Type de demande non supporté" }, { status: 422 });
+
   const vente = await prisma.vente.findUnique({ where: { id: body.venteId } });
   if (!vente || vente.statut !== "COMPLETEE")
     return NextResponse.json({ error: "Vente introuvable ou non modifiable" }, { status: 404 });

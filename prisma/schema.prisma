@@ -199,6 +199,7 @@ model VarianteProduit {
   id            String  @id @default(cuid())
   produitId     String  @map("produit_id")
   couleur       String
+  description   String?
   codeBarres    String? @unique @map("code_barres")
   stockActuel   Int     @default(0) @map("stock_actuel")
   stockMinimum  Int     @default(0) @map("stock_minimum")

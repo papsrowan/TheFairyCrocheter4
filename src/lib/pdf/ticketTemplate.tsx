@@ -42,7 +42,7 @@ const MODES: Record<string, string> = {
 };
 
 function fmtXAF(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n).replace(/[   ]/g, " ") + " XAF";
 }
 
 function fmtDate(d: Date | string) {
@@ -57,6 +57,7 @@ export interface TicketPDFProps {
     id:           string;
     numero:       string;
     createdAt:    Date | string;
+    dateFacture?: Date | string | null;
     sousTotal:    number;
     montantTVA:   number;
     remiseGlobale: number;
@@ -113,7 +114,7 @@ export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
         </View>
         <View style={styles.row}>
           <Text style={styles.small}>Date</Text>
-          <Text style={styles.small}>{fmtDate(vente.createdAt)}</Text>
+          <Text style={styles.small}>{fmtDate(vente.dateFacture ?? vente.createdAt)}</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.small}>Vendeur</Text>

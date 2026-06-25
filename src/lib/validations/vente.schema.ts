@@ -31,10 +31,17 @@ export const createVenteSchema = z.object({
 });
 
 export const updateVenteSchema = z.object({
-  statut:         z.enum(["ANNULEE", "REMBOURSEE"]).optional(),
+  statut:         z.enum(["ANNULEE"]).optional(),
   notes:          z.string().max(500).optional(),
   statutPaiement: z.enum(["PAYE", "EN_ATTENTE"]).optional(),
   modePaiementReel: z.enum(["ESPECES", "CARTE", "VIREMENT", "CHEQUE", "MIXTE"]).optional(),
+  // Règlement (paiement) par le client d'une vente à crédit — partiel ou total
+  reglementCredit: z
+    .object({
+      montant: z.number().positive("Montant invalide"),
+      modePaiement: z.enum(["ESPECES", "CARTE", "VIREMENT", "CHEQUE", "MIXTE"]).optional(),
+    })
+    .optional(),
 });
 
 export type CreateVenteInput = z.infer<typeof createVenteSchema>;

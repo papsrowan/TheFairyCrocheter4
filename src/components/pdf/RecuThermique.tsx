@@ -11,6 +11,7 @@ interface RecuProps {
   vente: {
     numero: string;
     createdAt: Date | string;
+    dateFacture?: Date | string | null;
     total: number;
     sousTotal: number;
     montantTVA: number;
@@ -67,7 +68,7 @@ export function RecuThermique({ vente, entreprise }: RecuProps) {
       {/* Numéro et date */}
       <div className="mb-1">
         <p className="font-bold">REÇU N° {vente.numero}</p>
-        <p>{formatDateTime(vente.createdAt)}</p>
+        <p>{formatDateTime(vente.dateFacture ?? vente.createdAt)}</p>
         {vente.client && (
           <p>Client : {vente.client.prenom ?? ""} {vente.client.nom}</p>
         )}

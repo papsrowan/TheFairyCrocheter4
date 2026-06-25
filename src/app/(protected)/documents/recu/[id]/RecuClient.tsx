@@ -13,7 +13,7 @@ const MODES: Record<string, string> = {
 };
 
 function fmtXAF(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(n).replace(/[   ]/g, " ") + " XAF";
 }
 
 function fmtDate(d: string) {
@@ -26,7 +26,7 @@ function fmtDate(d: string) {
 interface Props {
   data: {
     vente: {
-      id: string; numero: string; createdAt: string;
+      id: string; numero: string; createdAt: string; dateFacture?: string | null;
       sousTotal: number; montantTVA: number; remiseGlobale: number;
       total: number; modePaiement: string; notes?: string | null;
       client?: { nom: string; prenom?: string | null } | null;
@@ -86,7 +86,7 @@ export function RecuClient({ data: { vente, entreprise } }: Props) {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Date</span>
-                <span>{fmtDate(vente.createdAt)}</span>
+                <span>{fmtDate(vente.dateFacture ?? vente.createdAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Vendeur</span>

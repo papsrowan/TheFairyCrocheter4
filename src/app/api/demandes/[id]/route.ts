@@ -30,49 +30,52 @@ export async function PATCH(
   if (!demande) return NextResponse.json({ error: "Demande introuvable" }, { status: 404 });
   if (demande.statut !== "EN_ATTENTE") return NextResponse.json({ error: "Demande déjà traitée" }, { status: 409 });
 
+  // Le remboursement n'est plus supporté : on ne peut plus approuver une telle demande
+  if (body.statut === "APPROUVEE" && demande.type === "REMBOURSEMENT")
+    return NextResponse.json(
+      { error: "Le remboursement n'est plus supporté. Vous pouvez rejeter cette demande." },
+      { status: 409 }
+    );
+
   await prisma.$transaction(async (tx) => {
     await tx.demandeApprobation.update({
       where: { id: params.id },
       data: { statut: body.statut, reponse: body.reponse ?? null },
     });
 
-    if (body.statut === "APPROUVEE") {
-      const newStatut = demande.type === "ANNULATION" ? "ANNULEE" : "REMBOURSEE";
+    if (body.statut === "APPROUVEE" && demande.type === "ANNULATION") {
+      await tx.vente.update({ where: { id: demande.venteId }, data: { statut: "ANNULEE" } });
 
-      if (demande.type !== "MODIFICATION") {
-        await tx.vente.update({ where: { id: demande.venteId }, data: { statut: newStatut } });
-
-        for (const ligne of demande.vente.lignes) {
-          const p = await tx.produit.update({
-            where: { id: ligne.produitId },
-            data: { stockActuel: { increment: ligne.quantite } },
-          });
-          await tx.mouvementStock.create({
-            data: {
-              produitId: ligne.produitId, type: "ENTREE", quantite: ligne.quantite,
-              stockAvant: p.stockActuel - ligne.quantite, stockApres: p.stockActuel,
-              venteId: demande.venteId, userId: session.user.id,
-              motif: `${newStatut} vente ${demande.vente.numero} (approuvé par SUPER_ADMIN)`,
-            },
-          });
-        }
-
-        await tx.ecritureFinanciere.create({
+      for (const ligne of demande.vente.lignes) {
+        const p = await tx.produit.update({
+          where: { id: ligne.produitId },
+          data: { stockActuel: { increment: ligne.quantite } },
+        });
+        await tx.mouvementStock.create({
           data: {
-            venteId: demande.venteId, type: "REMBOURSEMENT",
-            montant: -demande.vente.total,
-            description: `${newStatut} vente ${demande.vente.numero}`,
-            metadata: { operateur: session.user.id, demandeId: demande.id },
+            produitId: ligne.produitId, type: "ENTREE", quantite: ligne.quantite,
+            stockAvant: p.stockActuel - ligne.quantite, stockApres: p.stockActuel,
+            venteId: demande.venteId, userId: session.user.id,
+            motif: `ANNULEE vente ${demande.vente.numero} (approuvé par SUPER_ADMIN)`,
           },
         });
+      }
 
-        // Corriger le total achats du client
-        if (demande.vente.clientId) {
-          await tx.client.update({
-            where: { id: demande.vente.clientId },
-            data: { totalAchats: { decrement: demande.vente.total } },
-          });
-        }
+      await tx.ecritureFinanciere.create({
+        data: {
+          venteId: demande.venteId, type: "REMBOURSEMENT",
+          montant: -demande.vente.total,
+          description: `Annulation vente ${demande.vente.numero}`,
+          metadata: { operateur: session.user.id, demandeId: demande.id },
+        },
+      });
+
+      // Corriger le total achats du client
+      if (demande.vente.clientId) {
+        await tx.client.update({
+          where: { id: demande.vente.clientId },
+          data: { totalAchats: { decrement: demande.vente.total } },
+        });
       }
     }
   });

@@ -3,6 +3,7 @@ import { z } from "zod";
 const varianteSchema = z.object({
   id:          z.string().optional(),
   couleur:     z.string().min(1).max(50),
+  description: z.string().max(120).optional().nullable(),
   stockActuel: z.number().int().min(0).default(0),
 });
 
@@ -29,6 +30,7 @@ export const updateProduitSchema = createProduitSchema.partial();
 
 export const ajusterStockSchema = z.object({
   produitId:    z.string().cuid(),
+  varianteId:   z.string().cuid().optional().nullable(),
   type:         z.enum(["ENTREE", "SORTIE_MANUELLE", "CORRECTION", "INVENTAIRE"]),
   quantite:     z.number().int().positive("Quantité doit être positive"),
   motif:        z.string().max(500).optional(),

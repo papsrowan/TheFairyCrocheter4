@@ -76,9 +76,8 @@ function calculateItemTotal(
 ): number {
   let brut: number;
   if (prixGrosApplique && prixGros && qtePrixGros && quantite >= qtePrixGros) {
-    const groupes = Math.floor(quantite / qtePrixGros);
-    const reste = quantite % qtePrixGros;
-    brut = groupes * qtePrixGros * prixGros + reste * prixBase;
+    // Dès que le seuil est atteint, le prix de gros s'applique à TOUTES les unités
+    brut = prixGros * quantite;
   } else {
     brut = prixBase * quantite;
   }
@@ -193,17 +192,11 @@ export const useCartStore = create<CartStore>((set, get) => ({
         items: state.items.map((i) => {
           if (i.produitId !== produitId || !i.prixGros || !i.qtePrixGros) return i;
 
-          // 2. Calculer combien de groupes gros et combien de reste sur le total
-          const groupes = Math.floor(totalQte / i.qtePrixGros);
-          const reste = totalQte % i.qtePrixGros;
-
-          // 3. Distribuer proportionnellement sur cette variante
-          const ratioGros = (groupes * i.qtePrixGros * i.quantite) / totalQte;
-          const ratioReste = (reste * i.quantite) / totalQte;
-          const newTotal = Math.round((ratioGros * i.prixGros + ratioReste * i.prixBase) * (1 - i.remise / 100) * 100) / 100;
-          const newPrix = Math.round((newTotal / i.quantite) * 100) / 100;
-
-          return { ...i, prixGrosApplique: true, prixUnitaire: newPrix, total: newTotal };
+          // Dès que le total (toutes couleurs) atteint le seuil, le prix de gros
+          // s'applique à TOUTES les unités de chaque variante.
+          if (totalQte < i.qtePrixGros) return i;
+          const newTotal = Math.round(i.prixGros * i.quantite * (1 - i.remise / 100) * 100) / 100;
+          return { ...i, prixGrosApplique: true, prixUnitaire: i.prixGros, total: newTotal };
         }),
       };
     });

@@ -6,10 +6,13 @@
 
 import { useState } from "react";
 
+interface VarianteOpt { id: string; couleur: string; description?: string | null; stockActuel: number }
+
 interface StockAjustementModalProps {
   produitId:   string;
   produitNom:  string;
   stockActuel: number;
+  variantes?:  VarianteOpt[];
   onSuccess:   (nouveauStock: number) => void;
   onClose:     () => void;
 }
@@ -24,22 +27,27 @@ const TYPES = [
 type TypeMouvement = typeof TYPES[number]["value"];
 
 export default function StockAjustementModal({
-  produitId, produitNom, stockActuel, onSuccess, onClose,
+  produitId, produitNom, stockActuel, variantes = [], onSuccess, onClose,
 }: StockAjustementModalProps) {
   const [type, setType]         = useState<TypeMouvement>("ENTREE");
   const [quantite, setQuantite] = useState("");
   const [motif, setMotif]       = useState("");
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const hasVariantes            = variantes.length > 0;
+  const [varianteId, setVarianteId] = useState<string>(hasVariantes ? variantes[0].id : "");
 
   const quantiteNum = parseInt(quantite) || 0;
+  // Base de calcul : stock de la couleur choisie (sinon stock global)
+  const varianteSel = variantes.find((v) => v.id === varianteId) ?? null;
+  const baseStock   = hasVariantes ? (varianteSel?.stockActuel ?? 0) : stockActuel;
 
   function calculeStockPrevu(): number | null {
     if (!quantite) return null;
     switch (type) {
-      case "ENTREE":          return stockActuel + quantiteNum;
-      case "SORTIE_MANUELLE": return stockActuel - quantiteNum;
-      case "CORRECTION":      return stockActuel + quantiteNum;
+      case "ENTREE":          return baseStock + quantiteNum;
+      case "SORTIE_MANUELLE": return baseStock - quantiteNum;
+      case "CORRECTION":      return baseStock + quantiteNum;
       case "INVENTAIRE":      return quantiteNum;
     }
   }
@@ -53,6 +61,7 @@ export default function StockAjustementModal({
 
     const payload: Record<string, unknown> = { type, quantite: quantiteNum, motif: motif || undefined };
     if (type === "INVENTAIRE") payload.nouveauStock = quantiteNum;
+    if (hasVariantes) payload.varianteId = varianteId;
 
     try {
       const res = await fetch(`/api/produits/${produitId}/stock`, {
@@ -100,10 +109,42 @@ export default function StockAjustementModal({
             </div>
           )}
 
-          {/* Stock actuel */}
+          {/* Sélecteur de couleur (produits multi-couleur) */}
+          {hasVariantes && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Couleur à ajuster</label>
+              <div className="flex flex-wrap gap-2">
+                {variantes.map((v) => {
+                  const sel = v.id === varianteId;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => { setVarianteId(v.id); setQuantite(""); }}
+                      title={`${v.couleur}${v.description ? " — " + v.description : ""} — ${v.stockActuel} en stock`}
+                      className={`flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full border text-xs transition-all ${
+                        sel ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-300" : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full border border-white shadow-sm" style={{ backgroundColor: v.couleur }} />
+                      <span className="font-medium">{v.couleur}</span>
+                      <span className="text-gray-400">({v.stockActuel})</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {varianteSel?.description && (
+                <p className="text-xs text-gray-500 mt-1">{varianteSel.description}</p>
+              )}
+            </div>
+          )}
+
+          {/* Stock actuel (de la couleur choisie si applicable) */}
           <div className="flex items-center justify-between px-4 py-3 bg-secondary rounded-xl">
-            <span className="text-sm text-muted-foreground">Stock actuel</span>
-            <span className="text-2xl font-bold text-foreground">{stockActuel}</span>
+            <span className="text-sm text-muted-foreground">
+              {hasVariantes ? `Stock ${varianteSel?.couleur ?? ""}` : "Stock actuel"}
+            </span>
+            <span className="text-2xl font-bold text-foreground">{baseStock}</span>
           </div>
 
           {/* Type de mouvement */}

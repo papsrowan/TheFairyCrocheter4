@@ -99,15 +99,17 @@ export function ClientForm({ mode, clientId, defaultValues = {}, categories, can
     setLoading(true);
     setError(null);
 
+    // Toujours envoyer tous les champs (vide → null) pour permettre de les EFFACER
+    // ou de retirer la catégorie. Sinon un champ vidé n'était jamais mis à jour.
     const payload = {
       nom:             nom.trim(),
-      ...(prenom.trim()    && { prenom:    prenom.trim() }),
-      ...(emailVal         && { email:     emailVal }),
-      ...(telephone.trim() && { telephone: telephone.trim() }),
-      ...(adresse.trim()   && { adresse:   adresse.trim() }),
-      ...(codePostal.trim()&& { codePostal:codePostal.trim() }),
-      ...(ville.trim()     && { ville:     ville.trim() }),
-      ...(categorieId      && { categorieId }),
+      prenom:          prenom.trim()     || null,
+      email:           emailVal          || null,
+      telephone:       telephone.trim()  || null,
+      adresse:         adresse.trim()    || null,
+      codePostal:      codePostal.trim() || null,
+      ville:           ville.trim()      || null,
+      categorieId:     categorieId       || null,
       consentementRGPD,
     };
 

@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         poids:           data.poids ?? null,
         dateAcquisition: data.dateAcquisition ? new Date(data.dateAcquisition) : null,
         ...(vars.length > 0 ? {
-          variantes: { create: vars.map(v => ({ couleur: v.couleur, stockActuel: v.stockActuel })) },
+          variantes: { create: vars.map(v => ({ couleur: v.couleur, description: v.description ?? null, stockActuel: v.stockActuel })) },
         } : {}),
       },
       include: { categorie: true, variantes: true },

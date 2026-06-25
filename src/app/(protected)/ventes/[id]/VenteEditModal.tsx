@@ -12,9 +12,14 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface Variante { id: string; couleur: string; description?: string | null; stockActuel: number }
+
 interface LigneEdit {
   _key: string;
   produitId: string;
+  varianteId?: string | null;
+  couleur?: string | null;
+  variantes?: Variante[];
   nom: string;
   prixUnitaire: number;
   tauxTVA: number;
@@ -22,7 +27,7 @@ interface LigneEdit {
   remise: number;
 }
 
-interface Produit { id: string; nom: string; prixVente: number; tauxTVA: number; stockActuel: number }
+interface Produit { id: string; nom: string; prixVente: number; tauxTVA: number; stockActuel: number; variantes?: Variante[] }
 interface Client  { id: string; nom: string; prenom?: string; telephone?: string }
 
 const MODES = [
@@ -46,7 +51,7 @@ interface Props {
     id: string; numero: string;
     clientId?: string | null; clientNom?: string;
     modePaiement: string; remiseGlobale: number; notes?: string | null;
-    lignes: Array<{ produitId: string; nom: string; prixUnitaire: number; tauxTVA: number; quantite: number; remise: number }>;
+    lignes: Array<{ produitId: string; varianteId?: string | null; couleur?: string | null; variantes?: Variante[]; nom: string; prixUnitaire: number; tauxTVA: number; quantite: number; remise: number }>;
   };
   onClose: () => void;
 }
@@ -100,7 +105,7 @@ export function VenteEditModal({ vente, onClose }: Props) {
     setLignes(prev => {
       const ex = prev.find(l => l.produitId === p.id);
       if (ex) return prev.map(l => l.produitId === p.id ? { ...l, quantite: l.quantite + 1 } : l);
-      return [...prev, { _key: String(keyRef.current++), produitId: p.id, nom: p.nom, prixUnitaire: p.prixVente, tauxTVA: p.tauxTVA, quantite: 1, remise: 0 }];
+      return [...prev, { _key: String(keyRef.current++), produitId: p.id, varianteId: null, couleur: null, variantes: p.variantes ?? [], nom: p.nom, prixUnitaire: p.prixVente, tauxTVA: p.tauxTVA, quantite: 1, remise: 0 }];
     });
     setProdSearch(""); setShowProdDD(false);
   }, []);
@@ -111,6 +116,13 @@ export function VenteEditModal({ vente, onClose }: Props) {
 
   const removeLigne = (key: string) => setLignes(prev => prev.filter(l => l._key !== key));
 
+  const setVariante = (key: string, varianteId: string) =>
+    setLignes(prev => prev.map(l => {
+      if (l._key !== key) return l;
+      const v = l.variantes?.find(x => x.id === varianteId);
+      return { ...l, varianteId: varianteId || null, couleur: v?.couleur ?? null };
+    }));
+
   const { mutate: sauvegarder, isPending } = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/ventes/${vente.id}`, {
@@ -118,7 +130,7 @@ export function VenteEditModal({ vente, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId, modePaiement, remiseGlobale, notes: notes || null,
-          lignes: lignes.map(l => ({ produitId: l.produitId, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise, tauxTVA: l.tauxTVA })),
+          lignes: lignes.map(l => ({ produitId: l.produitId, varianteId: l.varianteId ?? null, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise, tauxTVA: l.tauxTVA })),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -186,6 +198,34 @@ export function VenteEditModal({ vente, onClose }: Props) {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{l.nom}</p>
                     <p className="text-xs text-muted-foreground">{formatCurrency(l.prixUnitaire)}/u</p>
+                    {l.variantes && l.variantes.length > 0 && (
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        {l.variantes.map(v => {
+                          const selected = l.varianteId === v.id;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => setVariante(l._key, selected ? "" : v.id)}
+                              title={`${v.couleur}${v.description ? " — " + v.description : ""} — ${v.stockActuel} en stock`}
+                              className={cn(
+                                "w-6 h-6 rounded-full border shadow-sm transition-all shrink-0",
+                                selected
+                                  ? "ring-2 ring-offset-1 ring-primary scale-110 border-white"
+                                  : "border-border hover:scale-105"
+                              )}
+                              style={{ backgroundColor: v.couleur }}
+                            />
+                          );
+                        })}
+                        <span className={cn("text-xs ml-1", l.varianteId ? "text-muted-foreground" : "text-amber-600 font-medium")}>
+                          {(() => {
+                            const sel = l.variantes?.find(x => x.id === l.varianteId);
+                            return sel ? `${sel.couleur}${sel.description ? " · " + sel.description : ""}` : "choisir une couleur";
+                          })()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {/* Quantité */}
                   <div className="flex items-center gap-1 shrink-0">

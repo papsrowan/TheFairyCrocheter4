@@ -3,16 +3,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { auth } from "@/lib/auth";
 import { Providers } from "@/components/shared/Providers";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -53,7 +46,7 @@ export default async function RootLayout({
         <link rel="icon" href="/TFC0.png" type="image/png" />
         <link rel="apple-touch-icon" href="/TFC0.png" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <Providers session={session}>
           {children}
         </Providers>

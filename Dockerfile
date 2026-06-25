@@ -16,11 +16,13 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 
-# Installer toutes les dépendances (prod + dev nécessaires au build)
-RUN npm ci --frozen-lockfile
+# Installer toutes les dépendances (prod + dev nécessaires au build).
+# 'npm ci' suit le lockfile ; l'option yarn/pnpm '--frozen-lockfile' n'existe pas en npm.
+RUN npm ci
 
-# Générer le client Prisma
-RUN npx prisma generate
+# Générer le client Prisma (appel direct du JS Prisma : évite la résolution
+# npx/PATH qui échoue dans Alpine — même méthode que docker/entrypoint.sh)
+RUN node node_modules/prisma/build/index.js generate
 
 # ── Stage 2 : Build ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder

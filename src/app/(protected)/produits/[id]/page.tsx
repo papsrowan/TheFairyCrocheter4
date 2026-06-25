@@ -56,12 +56,29 @@ export default async function ProduitDetailPage({ params }: Params) {
   const enAlerte  = produit.stockActuel < produit.stockMinimum;
 
   // Calculs stats
-  const totalEntrees = produit.mouvementsStock
-    .filter((m) => m.type === "ENTREE")
+  // On ne compte que les mouvements globaux (varianteId null) : pour un produit
+  // multi-couleur, chaque ligne écrit aussi un mouvement par variante — les inclure
+  // doublerait les totaux.
+  const movG = produit.mouvementsStock.filter((m) => !m.varianteId);
+  // Total entrées = vraies réceptions (stock initial + ajustements), hors corrections
+  // de vente (celles-ci ont un venteId).
+  const totalEntrees = movG
+    .filter((m) => m.type === "ENTREE" && !m.venteId)
     .reduce((s, m) => s + m.quantite, 0);
-  const totalSorties = produit.mouvementsStock
-    .filter((m) => m.type.startsWith("SORTIE"))
+  // Total sorties = unités réellement vendues = sorties de vente − restitutions liées
+  // à une vente (modification/annulation). Les corrections s'annulent → total stable
+  // quel que soit le nombre de modifications.
+  // sorties = ventes + sorties manuelles (perte/casse/ajustement couleur) − restitutions de vente
+  const sortiesVente = movG
+    .filter((m) => m.type.startsWith("SORTIE") && m.venteId)
     .reduce((s, m) => s + m.quantite, 0);
+  const sortiesManuelles = movG
+    .filter((m) => m.type.startsWith("SORTIE") && !m.venteId)
+    .reduce((s, m) => s + m.quantite, 0);
+  const restitutionsVente = movG
+    .filter((m) => m.type === "ENTREE" && m.venteId)
+    .reduce((s, m) => s + m.quantite, 0);
+  const totalSorties = sortiesVente + sortiesManuelles - restitutionsVente;
 
   const margePercent = produit.prixAchat > 0
     ? ((produit.prixVente - produit.prixAchat) / produit.prixVente * 100).toFixed(1)
@@ -85,6 +102,7 @@ export default async function ProduitDetailPage({ params }: Params) {
     variantes: produit.variantes.map((v) => ({
       id:          v.id,
       couleur:     v.couleur,
+      description: v.description ?? "",
       stockActuel: v.stockActuel,
     })),
   };
@@ -227,6 +245,9 @@ export default async function ProduitDetailPage({ params }: Params) {
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{v.couleur}</p>
+                    {v.description && (
+                      <p className="text-xs text-muted-foreground truncate" title={v.description}>{v.description}</p>
+                    )}
                     <p className={cn("text-xs font-bold", rupture ? "text-destructive" : "text-primary")}>
                       {rupture ? "Rupture" : `${v.stockActuel} unités`}
                     </p>
@@ -288,6 +309,9 @@ export default async function ProduitDetailPage({ params }: Params) {
             canStock={canEdit}
             canDelete={canDelete}
             isSuperAdmin={role === "SUPER_ADMIN"}
+            variantes={produit.variantes.map((v) => ({
+              id: v.id, couleur: v.couleur, description: v.description ?? null, stockActuel: v.stockActuel,
+            }))}
           />
         </div>
       </div>

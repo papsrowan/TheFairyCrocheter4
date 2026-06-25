@@ -34,7 +34,7 @@ export function VenteActions({ venteId, statut, canAnnuler, isManager, demandes 
   if (statut !== "COMPLETEE") return null;
 
   // ── SUPER_ADMIN ───────────────────────────────────────────────────────────
-  async function handleAction(newStatut: "ANNULEE" | "REMBOURSEE") {
+  async function handleAction(newStatut: "ANNULEE") {
     if (!confirm(`Confirmer : ${newStatut.toLowerCase()} cette vente ? Stock restitué.`)) return;
     setLoading(true); setError(null);
     try {
@@ -170,10 +170,6 @@ export function VenteActions({ venteId, statut, canAnnuler, isManager, demandes 
               className="btn-danger text-sm disabled:opacity-50 flex items-center gap-2">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Annuler la vente
             </button>
-            <button onClick={() => handleAction("REMBOURSEE")} disabled={loading}
-              className="btn-secondary text-sm border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-50 flex items-center gap-2">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Rembourser
-            </button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Restitue le stock et crée une écriture financière corrective.
@@ -204,7 +200,6 @@ export function VenteActions({ venteId, statut, canAnnuler, isManager, demandes 
                 <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
                   className="w-full h-9 rounded-lg border px-3 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="ANNULATION">Annulation de la vente</option>
-                  <option value="REMBOURSEMENT">Remboursement client</option>
                   <option value="MODIFICATION">Modification de la vente</option>
                 </select>
               </div>

@@ -6,6 +6,8 @@ import {
   Upload, Camera, Loader2, AlertCircle, X, Plus, Palette,
 } from "lucide-react";
 
+const parseCommaFloat = (s: string) => parseFloat(s.replace(",", "."));
+
 const QUICK_COLORS = [
   { label: "Blanc",        hex: "#FFFFFF" },
   { label: "Crème",        hex: "#FDF8F0" },
@@ -65,8 +67,8 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
   const [error,      setError]      = useState<string | null>(null);
   const [showNewCat, setShowNewCat] = useState(false);
   // Variantes couleurs
-  const [variantes, setVariantes] = useState<Array<{ couleur: string; stockActuel: number; id?: string }>>(
-    (initialData as { variantes?: Array<{ id: string; couleur: string; stockActuel: number }> })?.variantes ?? []
+  const [variantes, setVariantes] = useState<Array<{ couleur: string; description?: string; stockActuel: number; id?: string }>>(
+    (initialData as { variantes?: Array<{ id: string; couleur: string; description?: string; stockActuel: number }> })?.variantes ?? []
   );
   const [newVarianteCouleur, setNewVarianteCouleur] = useState("");
   const [newCatNom,   setNewCatNom]   = useState("");
@@ -140,10 +142,10 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
       description:     form.description || undefined,
       categorieId:     form.categorieId || null,
       poids:           form.poids || null,
-      prixVente:       parseFloat(form.prixVente),
-      prixGros:        form.prixGros ? parseFloat(form.prixGros) : null,
+      prixVente:       parseCommaFloat(form.prixVente),
+      prixGros:        form.prixGros ? parseCommaFloat(form.prixGros) : null,
       qtePrixGros:     form.qtePrixGros ? parseInt(form.qtePrixGros) : null,
-      prixAchat:       parseFloat(form.prixAchat) || 0,
+      prixAchat:       parseCommaFloat(form.prixAchat) || 0,
       tauxTVA:         0,
       stockActuel:     stockFinal,
       stockMinimum:    parseInt(form.stockMinimum) || 5,
@@ -263,33 +265,43 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
         {variantes.length > 0 && (
           <div className="space-y-2">
             {variantes.map((v, i) => (
-              <div key={i} className="flex items-center gap-2 p-2 rounded-xl border bg-muted/30">
-                {/* Aperçu couleur + picker natif */}
-                <label className="shrink-0 cursor-pointer" title="Changer la couleur">
-                  <div className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
-                    style={{ background: v.couleur.startsWith("#") ? v.couleur : v.couleur }} />
-                  <input type="color" className="sr-only"
-                    value={v.couleur.startsWith("#") ? v.couleur : "#C17F24"}
+              <div key={i} className="p-2 rounded-xl border bg-muted/30 space-y-2">
+                <div className="flex items-center gap-2">
+                  {/* Aperçu couleur + picker natif */}
+                  <label className="shrink-0 cursor-pointer" title="Changer la couleur">
+                    <div className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
+                      style={{ background: v.couleur.startsWith("#") ? v.couleur : v.couleur }} />
+                    <input type="color" className="sr-only"
+                      value={v.couleur.startsWith("#") ? v.couleur : "#C17F24"}
+                      onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, couleur: e.target.value } : x))}
+                    />
+                  </label>
+                  {/* Nom de la couleur */}
+                  <input
+                    value={v.couleur}
                     onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, couleur: e.target.value } : x))}
+                    placeholder="Nom (Rose, Bleu…)"
+                    className="flex-1 h-8 rounded-lg border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                </label>
-                {/* Nom de la couleur */}
+                  {/* Stock */}
+                  <input type="number" min={0} value={v.stockActuel}
+                    onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, stockActuel: parseInt(e.target.value) || 0 } : x))}
+                    className="w-20 h-8 rounded-lg border bg-background px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">u.</span>
+                  <button type="button" onClick={() => setVariantes(vs => vs.filter((_, j) => j !== i))}
+                    className="p-1 rounded hover:bg-destructive/10 text-destructive transition-colors shrink-0">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {/* Description pour distinguer les couleurs proches */}
                 <input
-                  value={v.couleur}
-                  onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, couleur: e.target.value } : x))}
-                  placeholder="Nom (Rose, Bleu…)"
-                  className="flex-1 h-8 rounded-lg border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={v.description ?? ""}
+                  onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                  placeholder="Description (ex: rose pâle, mat, brillant…)"
+                  maxLength={120}
+                  className="w-full h-8 rounded-lg border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {/* Stock */}
-                <input type="number" min={0} value={v.stockActuel}
-                  onChange={e => setVariantes(vs => vs.map((x, j) => j === i ? { ...x, stockActuel: parseInt(e.target.value) || 0 } : x))}
-                  className="w-20 h-8 rounded-lg border bg-background px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                <span className="text-xs text-muted-foreground shrink-0">u.</span>
-                <button type="button" onClick={() => setVariantes(vs => vs.filter((_, j) => j !== i))}
-                  className="p-1 rounded hover:bg-destructive/10 text-destructive transition-colors shrink-0">
-                  <X className="h-3.5 w-3.5" />
-                </button>
               </div>
             ))}
           </div>
@@ -399,13 +411,13 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label">Prix Détail (XAF) *</label>
-            <input type="number" required min="0" step="1"
+            <input type="text" inputMode="decimal" required
               value={form.prixVente} onChange={(e) => set("prixVente", e.target.value)}
               className="form-input" placeholder="0" />
           </div>
           <div>
             <label className="form-label">Prix de Gros (XAF)</label>
-            <input type="number" min="0" step="1"
+            <input type="text" inputMode="decimal"
               value={form.prixGros} onChange={(e) => set("prixGros", e.target.value)}
               className="form-input" placeholder="0" />
           </div>
@@ -420,21 +432,21 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
           </div>
           <div>
             <label className="form-label">Prix d&apos;achat (XAF)</label>
-            <input type="number" min="0" step="1"
+            <input type="text" inputMode="decimal"
               value={form.prixAchat} onChange={(e) => set("prixAchat", e.target.value)}
               className="form-input" placeholder="0" />
           </div>
         </div>
 
         {/* Marge calculée */}
-        {form.prixVente && parseFloat(form.prixVente) > 0 && parseFloat(form.prixAchat) > 0 && (
+        {form.prixVente && parseCommaFloat(form.prixVente) > 0 && parseCommaFloat(form.prixAchat) > 0 && (
           <div className="text-sm bg-secondary rounded-xl px-4 py-2.5 text-secondary-foreground">
             Marge :{" "}
             <span className="font-semibold">
-              {(((parseFloat(form.prixVente) - parseFloat(form.prixAchat)) / parseFloat(form.prixVente)) * 100).toFixed(1)}%
+              {(((parseCommaFloat(form.prixVente) - parseCommaFloat(form.prixAchat)) / parseCommaFloat(form.prixVente)) * 100).toFixed(1)}%
             </span>
             {" · "}
-            {(parseFloat(form.prixVente) - parseFloat(form.prixAchat)).toLocaleString("fr-FR")} XAF
+            {(parseCommaFloat(form.prixVente) - parseCommaFloat(form.prixAchat)).toLocaleString("fr-FR")} XAF
           </div>
         )}
       </div>

@@ -173,9 +173,10 @@ export async function POST(req: NextRequest) {
       const totalCalcule = Math.round(sousTotal * (1 - venteData.remiseGlobale / 100) * 100) / 100;
       const total = venteData.prixSpecial ?? totalCalcule;
 
-      // 2. Génération du numéro de vente
+      // 2. Génération du numéro de vente — ordonner par numéro (séquence) et NON par
+      //    createdAt : une vente antidatée a un createdAt passé et fausserait la suite.
       const lastVente = await tx.vente.findFirst({
-        orderBy: { createdAt: "desc" },
+        orderBy: { numero: "desc" },
         select: { numero: true },
       });
       const lastNum = lastVente ? parseInt(lastVente.numero.split("-")[2] ?? "0") : 0;
@@ -198,6 +199,8 @@ export async function POST(req: NextRequest) {
           statutPaiement: (estCredit || estPartiel) ? "EN_ATTENTE" : "PAYE",
           montantPaye:    montantPaye,
           dateFacture:    venteData.dateFacture ? new Date(venteData.dateFacture) : null,
+          // Antidatage : la vente compte au jour choisi dans le dashboard / finances / listes
+          ...(venteData.dateFacture ? { createdAt: new Date(venteData.dateFacture) } : {}),
           dateEcheance:   venteData.dateEcheance ? new Date(venteData.dateEcheance) : null,
           notes:          venteData.notes,
           offlineId:      venteData.offlineId ?? null,
@@ -281,17 +284,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 5. Écriture financière (append-only)
-      await tx.ecritureFinanciere.create({
-        data: {
-          venteId: nouvelleVente.id,
-          type: "RECETTE_VENTE",
-          montant: total,
-          description: `Vente ${numero}`,
-          date: new Date(),
-          metadata: { modePaiement: venteData.modePaiement, caissier: session.user.id },
-        },
-      });
+      // 5. Écriture financière — les ventes CREDIT n'encaissent rien à la création ;
+      //    la RECETTE_VENTE sera créée lors du PATCH "paiement reçu".
+      if (!estCredit) {
+        await tx.ecritureFinanciere.create({
+          data: {
+            venteId:     nouvelleVente.id,
+            type:        "RECETTE_VENTE",
+            montant:     total,
+            description: `Vente ${numero}`,
+            // Utiliser la date de facture si fournie (antidatage), sinon maintenant
+            date:        venteData.dateFacture ? new Date(venteData.dateFacture) : new Date(),
+            metadata:    { modePaiement: venteData.modePaiement, caissier: session.user.id },
+          },
+        });
+      }
 
       // 6. Mise à jour du total d'achats du client
       if (venteData.clientId) {

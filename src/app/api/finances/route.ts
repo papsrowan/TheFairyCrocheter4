@@ -60,10 +60,12 @@ export async function GET(req: NextRequest) {
   const sumByType = (stats: typeof statsMois, type: string) =>
     stats.find((s) => s.type === type)?._sum.montant ?? 0;
 
-  const caMois = sumByType(statsMois, "RECETTE_VENTE");
-  const depensesMois =
-    sumByType(statsMois, "DEPENSE") + sumByType(statsMois, "REMBOURSEMENT");
-  const caMoisPrecedent = sumByType(statsMoisPrecedent, "RECETTE_VENTE");
+  // CA net = recettes des ventes − annulations/remboursements (stockés en négatif)
+  const caMois = sumByType(statsMois, "RECETTE_VENTE") + sumByType(statsMois, "REMBOURSEMENT");
+  // Dépenses = uniquement les charges d'exploitation saisies manuellement
+  const depensesMois = sumByType(statsMois, "DEPENSE");
+  const caMoisPrecedent =
+    sumByType(statsMoisPrecedent, "RECETTE_VENTE") + sumByType(statsMoisPrecedent, "REMBOURSEMENT");
 
   return NextResponse.json({
     ecritures,

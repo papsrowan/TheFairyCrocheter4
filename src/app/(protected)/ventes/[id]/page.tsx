@@ -5,11 +5,11 @@ import { redirect, notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
-import { Package, User, Calendar, CreditCard, FileText, Receipt, Eye, ArrowLeft } from "lucide-react";
+import { Package, User, Calendar, CreditCard, FileText, Receipt, Eye, ArrowLeft, Clock } from "lucide-react";
 import { ShareButton } from "@/components/documents/ShareButton";
 import { VenteActionsWrapper } from "./VenteActionsWrapper";
 import { VenteEditButton } from "./VenteEditButton";
-import { RetourButton } from "./RetourButton";
+import { RemboursementCreditButton } from "./RemboursementCreditButton";
 import type { Role } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -43,26 +43,77 @@ export default async function VenteDetailPage({ params }: Params) {
 
   const { id } = await params;
 
-  const vente = await prisma.vente.findUnique({
-    where: { id },
-    include: {
-      client:  true,
-      vendeur: { select: { nom: true, prenom: true } },
-      lignes: {
-        include: {
-          produit: {
-            select: {
-              id: true, nom: true, codeBarres: true, imageUrl: true,
-              couleur: true, poids: true, categorie: { select: { nom: true } },
+  const [vente, auditLogs, notesVente] = await Promise.all([
+    prisma.vente.findUnique({
+      where: { id },
+      include: {
+        client:  true,
+        vendeur: { select: { nom: true, prenom: true } },
+        lignes: {
+          include: {
+            produit: {
+              select: {
+                id: true, nom: true, codeBarres: true, imageUrl: true,
+                couleur: true, poids: true, categorie: { select: { nom: true } },
+                variantes: { select: { id: true, couleur: true, description: true, stockActuel: true }, orderBy: { couleur: "asc" } },
+              },
             },
+            variante: { select: { id: true, couleur: true } },
           },
+          orderBy: { id: "asc" },
         },
-        orderBy: { id: "asc" },
       },
-    },
-  });
+    }),
+    prisma.auditLog.findMany({
+      where: { entityId: id, entityType: "vente" },
+      include: { user: { select: { nom: true, prenom: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.note.findMany({
+      where: { entityId: id, entityType: "vente" },
+      include: { auteur: { select: { nom: true, prenom: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   if (!vente) notFound();
+
+  // ── Construire la timeline historique ──────────────────────────────────────
+  type TLColor = "green" | "amber" | "red" | "gray";
+  type TLEvent = { id: string; date: Date; label: string; description?: string; auteur?: string; color: TLColor };
+
+  const ACTION_META: Record<string, { label: string; color: TLColor }> = {
+    "vente.created": { label: "Vente créée",    color: "green" },
+    "vente.updated": { label: "Vente modifiée", color: "amber" },
+    "vente.annulee": { label: "Vente annulée",  color: "red"   },
+  };
+
+  const uName = (u?: { nom: string; prenom: string } | null) =>
+    u ? `${u.prenom ?? ""} ${u.nom}`.trim() : undefined;
+
+  const timeline: TLEvent[] = [
+    ...auditLogs
+      .filter(a => a.action in ACTION_META)
+      .map(a => {
+        const meta = ACTION_META[a.action];
+        return {
+          id: `audit-${a.id}`, date: a.createdAt,
+          label: meta.label, auteur: uName(a.user), color: meta.color,
+        };
+      }),
+    ...notesVente.map(n => ({
+      id: `note-${n.id}`, date: n.createdAt,
+      label: "Note interne", description: n.contenu,
+      auteur: uName(n.auteur), color: "gray" as TLColor,
+    })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const DOT_CLS: Record<TLColor, string> = {
+    green: "bg-green-500",
+    amber: "bg-amber-500",
+    red:   "bg-red-500",
+    gray:  "bg-gray-400",
+  };
 
   const statut = STATUT_STYLE[vente.statut] ?? { label: vente.statut, cls: "status-badge" };
   const canDocs = hasPermission(role, "documents:read");
@@ -87,7 +138,7 @@ export default async function VenteDetailPage({ params }: Params) {
             <span className="text-muted-foreground flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" /> Date
             </span>
-            <span className="font-medium">{formatDateTime(vente.createdAt)}</span>
+            <span className="font-medium">{formatDateTime(vente.dateFacture ?? vente.createdAt)}</span>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -271,19 +322,6 @@ export default async function VenteDetailPage({ params }: Params) {
         </div>
       )}
 
-      {/* Retour produit — SUPER_ADMIN */}
-      {role === "SUPER_ADMIN" && vente.statut === "COMPLETEE" && (
-        <RetourButton
-          venteId={vente.id}
-          lignes={vente.lignes.map(l => ({
-            produitId:       l.produit.id,
-            nom:             l.produit.nom,
-            quantiteVendue:  l.quantite,
-            prixUnitaire:    l.prixUnitaire,
-          }))}
-        />
-      )}
-
       {/* Modification SUPER_ADMIN */}
       {role === "SUPER_ADMIN" && vente.statut === "COMPLETEE" && (
         <VenteEditButton
@@ -297,6 +335,9 @@ export default async function VenteDetailPage({ params }: Params) {
             notes: vente.notes,
             lignes: vente.lignes.map(l => ({
               produitId: l.produit.id,
+              varianteId: l.varianteId ?? null,
+              couleur: l.variante?.couleur ?? null,
+              variantes: l.produit.variantes,
               nom: l.produit.nom,
               prixUnitaire: l.prixUnitaire,
               tauxTVA: l.tauxTVA,
@@ -307,12 +348,54 @@ export default async function VenteDetailPage({ params }: Params) {
         />
       )}
 
+      {/* Remboursement (règlement) d'une vente à crédit par le client */}
+      {vente.statut === "COMPLETEE"
+        && vente.modePaiement === "CREDIT" && vente.statutPaiement === "EN_ATTENTE" && (
+        <RemboursementCreditButton venteId={vente.id} total={vente.total} montantPaye={vente.montantPaye ?? 0} />
+      )}
+
       {/* Actions vente + demandes */}
       <VenteActionsWrapper
         venteId={vente.id}
         statut={vente.statut}
         role={role}
       />
+
+      {/* ── Historique ── */}
+      {timeline.length > 0 && (
+        <div className="card p-5 space-y-4">
+          <h2 className="flex items-center gap-2 font-semibold text-base">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Historique
+          </h2>
+          <ol className="relative border-l border-border ml-2 space-y-5">
+            {timeline.map((ev) => (
+              <li key={ev.id} className="ml-5">
+                <span
+                  className={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-background ${DOT_CLS[ev.color]}`}
+                />
+                <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5">
+                  <span className="text-sm font-medium">{ev.label}</span>
+                  {ev.auteur && (
+                    <span className="text-xs text-muted-foreground">par {ev.auteur}</span>
+                  )}
+                  <time
+                    className="text-xs text-muted-foreground ml-auto"
+                    dateTime={ev.date.toISOString()}
+                  >
+                    {formatDateTime(ev.date)}
+                  </time>
+                </div>
+                {ev.description && (
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">
+                    {ev.description}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

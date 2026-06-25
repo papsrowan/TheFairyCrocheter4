@@ -299,8 +299,9 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
   const [paiementPartiel,  setPaiementPartiel]  = useState(false);
   const [montantPayeInput, setMontantPayeInput] = useState("");
   const [dateEcheance,     setDateEcheance]     = useState("");
-  const [showDateFacture,  setShowDateFacture]  = useState(false);
-  const [dateFacture,      setDateFacture]      = useState("");
+  // Date de la vente — visible par défaut, permet l'antidatage
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [dateFacture,      setDateFacture]      = useState(todayStr);
 
   const { mutate: creerVente, isPending } = useMutation({
     mutationFn: async (payload: object) => {
@@ -331,8 +332,11 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
     },
   });
 
+  // Accepte les virgules comme séparateur décimal (ex: "1500,50" → 1500.50)
+  const parseCommaFloat = (s: string) => parseFloat(s.replace(",", "."));
+
   const prixSpecialValide = showPrixSpecial && prixSpecialInput
-    ? parseFloat(prixSpecialInput)
+    ? parseCommaFloat(prixSpecialInput)
     : null;
 
   const buildPayload = () => ({
@@ -352,8 +356,9 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
       motifPrixSpecial: motifPrixSpecial.trim() || null,
     } : {}),
     ...(payerPlusTard && dateEcheance ? { dateEcheance: new Date(dateEcheance).toISOString() } : {}),
-    ...(paiementPartiel && montantPayeInput ? { montantPaye: parseFloat(montantPayeInput) } : {}),
-    ...(showDateFacture && dateFacture ? { dateFacture: new Date(dateFacture).toISOString() } : {}),
+    ...(paiementPartiel && montantPayeInput ? { montantPaye: parseCommaFloat(montantPayeInput) } : {}),
+    // Toujours envoyer la date ; si différente d'aujourd'hui = antidatage
+    dateFacture: dateFacture ? new Date(dateFacture).toISOString() : undefined,
   });
 
   const handleValider = () => {
@@ -464,22 +469,17 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                     </div>
                   )}
                   {/* Détail calcul prix de gros */}
-                  {item.prixGros && item.qtePrixGros && item.quantite >= item.qtePrixGros ? (() => {
-                    const groupes = Math.floor(item.quantite / item.qtePrixGros);
-                    const reste   = item.quantite % item.qtePrixGros;
-                    return (
-                      <div className="text-xs space-y-0.5 mt-0.5">
-                        <span className="inline-block bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                          Prix gros actif
-                        </span>
-                        <p className="text-muted-foreground font-mono">
-                          {groupes}×{item.qtePrixGros}×{formatCurrency(item.prixGros!)}
-                          {reste > 0 && <> + {reste}×{formatCurrency(item.prixBase)}</>}
-                        </p>
-                        {item.tauxTVA > 0 && <p className="text-muted-foreground">TVA {item.tauxTVA}%</p>}
-                      </div>
-                    );
-                  })() : (
+                  {item.prixGrosApplique && item.prixGros && item.qtePrixGros ? (
+                    <div className="text-xs space-y-0.5 mt-0.5">
+                      <span className="inline-block bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                        Prix gros actif
+                      </span>
+                      <p className="text-muted-foreground font-mono">
+                        {item.quantite}×{formatCurrency(item.prixGros!)}
+                      </p>
+                      {item.tauxTVA > 0 && <p className="text-muted-foreground">TVA {item.tauxTVA}%</p>}
+                    </div>
+                  ) : (
                     <p className="text-xs text-muted-foreground">
                       {formatCurrency(item.prixBase)} / unité
                       {item.prixGros && item.qtePrixGros && (
@@ -641,7 +641,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                 <span className="flex-1 font-medium">Options avancées</span>
                 {(showPrixSpecial && prixSpecialValide && prixSpecialValide > 0) && <span className="text-amber-600 font-bold">Prix spécial</span>}
                 {payerPlusTard && <span className="text-blue-600 font-bold">Crédit</span>}
-                {showDateFacture && dateFacture && <span className="text-purple-600 font-bold">Date perso.</span>}
+                {dateFacture && dateFacture !== todayStr && <span className="text-purple-600 font-bold">Antidaté</span>}
                 <span className="group-open:rotate-180 transition-transform">▾</span>
               </summary>
               <div className="px-3 pb-3 pt-1 space-y-2 border-t bg-muted/20">
@@ -657,7 +657,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                     {showPrixSpecial && (
                       <div className="space-y-1 pl-4">
                         <div className="flex gap-2">
-                          <input type="number" min={1} value={prixSpecialInput}
+                          <input type="text" inputMode="decimal" value={prixSpecialInput}
                             onChange={e => setPrixSpecialInput(e.target.value)}
                             placeholder={String(Math.round(total()))}
                             className="flex-1 h-7 rounded border px-2 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-amber-400" />
@@ -698,16 +698,16 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                       {paiementPartiel && (
                         <div className="space-y-1">
                           <div className="flex gap-2 items-center">
-                            <input type="number" min={0} max={Math.round(prixSpecialValide && prixSpecialValide > 0 ? prixSpecialValide : total())}
+                            <input type="text" inputMode="decimal"
                               value={montantPayeInput}
                               onChange={e => setMontantPayeInput(e.target.value)}
                               placeholder="Montant payé maintenant"
                               className="flex-1 h-7 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400" />
                             <span className="text-xs text-muted-foreground shrink-0">XAF</span>
                           </div>
-                          {montantPayeInput && parseFloat(montantPayeInput) > 0 && (
+                          {montantPayeInput && parseCommaFloat(montantPayeInput) > 0 && (
                             <p className="text-xs text-indigo-600 font-medium">
-                              Reste à payer : {formatCurrency((prixSpecialValide && prixSpecialValide > 0 ? prixSpecialValide : total()) - parseFloat(montantPayeInput))}
+                              Reste à payer : {formatCurrency((prixSpecialValide && prixSpecialValide > 0 ? prixSpecialValide : total()) - parseCommaFloat(montantPayeInput))}
                             </p>
                           )}
                         </div>
@@ -716,20 +716,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                   )}
                 </div>
 
-                {/* Date facture */}
-                <div>
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-purple-700 mb-1 cursor-pointer">
-                    <input type="checkbox" checked={showDateFacture}
-                      onChange={e => { setShowDateFacture(e.target.checked); if (!e.target.checked) setDateFacture(""); }}
-                      className="rounded" />
-                    <Calendar className="h-3 w-3" /> Date de facture personnalisée
-                  </label>
-                  {showDateFacture && (
-                    <input type="date" value={dateFacture}
-                      onChange={e => setDateFacture(e.target.value)}
-                      className="w-full h-7 rounded border px-2 text-xs pl-4 focus:outline-none focus:ring-1 focus:ring-purple-400" />
-                  )}
-                </div>
+                {/* (date de vente déplacée sous les options) */}
               </div>
             </details>
           )}
@@ -748,6 +735,19 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
               ))}
             </div>
           )}
+
+          {/* Date de la vente — toujours visible, antidatage possible */}
+          <div className="flex items-center gap-2">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <label className="text-xs text-muted-foreground shrink-0">Date de la vente</label>
+            <input
+              type="date"
+              value={dateFacture}
+              max={todayStr}
+              onChange={e => setDateFacture(e.target.value)}
+              className="flex-1 h-7 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+          </div>
 
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {isFullyOnline

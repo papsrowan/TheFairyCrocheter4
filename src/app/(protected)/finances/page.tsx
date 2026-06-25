@@ -92,12 +92,38 @@ export default async function FinancesPage() {
     return stats.find((s) => s.type === type)?._sum.montant ?? 0;
   }
 
-  const caMois      = sum(statsMoisActuel, "RECETTE_VENTE");
-  const depMois     = sum(statsMoisActuel, "DEPENSE") + sum(statsMoisActuel, "REMBOURSEMENT");
+  // ── Coût des marchandises vendues (COGS) = Σ quantité vendue × prix d'achat ──
+  const [lignesCogsMois, lignesCogsAnnee] = await Promise.all([
+    prisma.ligneVente.groupBy({
+      by: ["produitId"],
+      where: { vente: { statut: "COMPLETEE", createdAt: { gte: debutMoisActuel } } },
+      _sum: { quantite: true },
+    }),
+    prisma.ligneVente.groupBy({
+      by: ["produitId"],
+      where: { vente: { statut: "COMPLETEE", createdAt: { gte: debutAnnee } } },
+      _sum: { quantite: true },
+    }),
+  ]);
+  const cogsPids = Array.from(new Set([...lignesCogsMois, ...lignesCogsAnnee].map((l) => l.produitId)));
+  const cogsProduits = await prisma.produit.findMany({
+    where: { id: { in: cogsPids } },
+    select: { id: true, prixAchat: true },
+  });
+  const prixAchatMap = Object.fromEntries(cogsProduits.map((p) => [p.id, p.prixAchat]));
+  const cogs = (lignes: typeof lignesCogsMois) =>
+    lignes.reduce((s, l) => s + (l._sum.quantite ?? 0) * (prixAchatMap[l.produitId] ?? 0), 0);
+  const cogsMois  = cogs(lignesCogsMois);
+  const cogsAnnee = cogs(lignesCogsAnnee);
+
+  // CA net = recettes des ventes − annulations/remboursements (écritures négatives)
+  const caMois      = sum(statsMoisActuel, "RECETTE_VENTE") + sum(statsMoisActuel, "REMBOURSEMENT");
+  // Dépenses = charges saisies + coût d'achat des produits vendus
+  const depMois     = sum(statsMoisActuel, "DEPENSE") + cogsMois;
   const benefMois   = caMois - depMois;
-  const caPrecedent = sum(statsMoisPrecedent, "RECETTE_VENTE");
-  const caAnnee     = sum(statsAnnee, "RECETTE_VENTE");
-  const depAnnee    = sum(statsAnnee, "DEPENSE") + sum(statsAnnee, "REMBOURSEMENT");
+  const caPrecedent = sum(statsMoisPrecedent, "RECETTE_VENTE") + sum(statsMoisPrecedent, "REMBOURSEMENT");
+  const caAnnee     = sum(statsAnnee, "RECETTE_VENTE") + sum(statsAnnee, "REMBOURSEMENT");
+  const depAnnee    = sum(statsAnnee, "DEPENSE") + cogsAnnee;
   const benefAnnee  = caAnnee - depAnnee;
 
   const evolutionCA = caPrecedent > 0
@@ -182,16 +208,18 @@ export default async function FinancesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="stat-card">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-muted-foreground">Recettes (mois)</span>
+            <span className="text-sm text-muted-foreground">Recettes nettes (mois)</span>
             <div className="rounded-lg bg-green-100 p-1.5">
               <TrendingUp className="h-4 w-4 text-green-600" />
             </div>
           </div>
           <p className="text-2xl font-bold text-green-600">{formatCurrency(caMois)}</p>
-          {evolutionCA !== null && (
+          {evolutionCA !== null ? (
             <p className={cn("text-xs mt-1 font-medium", evolutionCA >= 0 ? "text-green-600" : "text-red-500")}>
               {evolutionCA >= 0 ? "▲" : "▼"} {Math.abs(evolutionCA)}% vs mois précédent
             </p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-1">Ventes − annulations</p>
           )}
         </div>
 
@@ -203,7 +231,7 @@ export default async function FinancesPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-red-500">{formatCurrency(depMois)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Remboursements inclus</p>
+          <p className="text-xs text-muted-foreground mt-1">Charges + coût d&apos;achat vendu</p>
         </div>
 
         <div className="stat-card">

@@ -11,7 +11,7 @@ export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount) + " XAF";
+  }).format(amount).replace(/[   ]/g, " ") + " XAF";
 }
 
 /** Formate une date en français (ex: 16 avril 2024) */
