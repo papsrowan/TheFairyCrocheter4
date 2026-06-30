@@ -100,14 +100,22 @@ export default async function ProduitsPage({
             )}
           </p>
         </div>
-        {canCreate && (
+        <div className="flex items-center gap-2">
           <Link
-            href="/produits/nouveau"
-            className="relative z-10 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            href="/produits/archives"
+            className="relative z-10 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
           >
-            + Nouveau produit
+            📦 Archives
           </Link>
-        )}
+          {canCreate && (
+            <Link
+              href="/produits/nouveau"
+              className="relative z-10 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              + Nouveau produit
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* ── Alertes de stock ────────────────────────────────────────── */}
