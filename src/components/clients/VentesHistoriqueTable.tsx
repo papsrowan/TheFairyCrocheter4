@@ -33,7 +33,7 @@ const MODE_LABELS: Record<ModePaiement, string> = {
 };
 
 function fmtMontant(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(n) + " XAF";
 }
 function fmtDate(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));

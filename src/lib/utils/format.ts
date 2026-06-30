@@ -10,7 +10,7 @@ import { fr } from "date-fns/locale";
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount).replace(/[   ]/g, " ") + " XAF";
 }
 

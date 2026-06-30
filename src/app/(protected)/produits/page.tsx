@@ -22,7 +22,7 @@ interface SearchParams {
 }
 
 function formatPrix(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(n) + " XAF";
 }
 
 export default async function ProduitsPage({

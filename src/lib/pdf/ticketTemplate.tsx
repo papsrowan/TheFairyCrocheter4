@@ -42,7 +42,7 @@ const MODES: Record<string, string> = {
 };
 
 function fmtXAF(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n).replace(/[   ]/g, " ") + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(n).replace(/[   ]/g, " ") + " XAF";
 }
 
 function fmtDate(d: Date | string) {

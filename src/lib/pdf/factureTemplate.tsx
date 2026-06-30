@@ -189,7 +189,7 @@ const MODES_PAIEMENT: Record<string, string> = {
 function formatCurrencyPDF(amount: number): string {
   return new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount).replace(/[   ]/g, " ") + " XAF";
 }
 

@@ -17,7 +17,7 @@ import { NotesSection } from "@/components/clients/NotesSection";
 type Params = { params: Promise<{ id: string }> };
 
 function formatMontant(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(n) + " XAF";
 }
 
 function formatDate(d: Date | null | string) {

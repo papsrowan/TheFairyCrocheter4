@@ -34,7 +34,7 @@ const MODE_ICONES: Record<ModePaiement, { label: string; classes: string }> = {
 };
 
 function formatEur(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + " XAF";
+  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(n) + " XAF";
 }
 
 function formatHeure(iso: string) {

@@ -20,7 +20,7 @@ export function DepenseForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          montant: parseFloat(form.montant),
+          montant: parseFloat(form.montant.replace(",", ".")),
           description: form.description,
           date: form.date || undefined,
         }),
@@ -61,9 +61,8 @@ export function DepenseForm() {
         <div>
           <label className="form-label">Montant (XAF)</label>
           <input
-            type="number"
-            min="1"
-            step="1"
+            type="text"
+            inputMode="decimal"
             required
             value={form.montant}
             onChange={(e) => setForm((f) => ({ ...f, montant: e.target.value }))}

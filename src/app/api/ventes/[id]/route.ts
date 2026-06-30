@@ -92,12 +92,12 @@ export async function PUT(
         const ht = l.prixUnitaire / (1 + l.tauxTVA / 100) * l.quantite * (1 - l.remise / 100);
         return sum + (l.prixUnitaire * l.quantite * (1 - l.remise / 100) - ht);
       }, 0);
-      const total = Math.round(sousTotal * (1 - body.remiseGlobale / 100));
+      const total = Math.round(sousTotal * (1 - body.remiseGlobale / 100) * 100) / 100;
 
       // 2. Remplacer les lignes (sans toucher au stock ici)
       await tx.ligneVente.deleteMany({ where: { venteId: venteActuelle.id } });
       for (const l of body.lignes) {
-        const totalLigne = Math.round(l.prixUnitaire * l.quantite * (1 - l.remise / 100) * (1 - body.remiseGlobale / 100));
+        const totalLigne = Math.round(l.prixUnitaire * l.quantite * (1 - l.remise / 100) * (1 - body.remiseGlobale / 100) * 100) / 100;
         await tx.ligneVente.create({
           data: { venteId: venteActuelle.id, produitId: l.produitId, varianteId: l.varianteId ?? null, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise, tauxTVA: l.tauxTVA, total: totalLigne },
         });
@@ -242,7 +242,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Cette vente est déjà soldée" }, { status: 409 });
     }
     // On plafonne le paiement au reste dû (pas de trop-perçu)
-    const montant = Math.min(Math.round(reglementCredit.montant), reste);
+    const montant = Math.min(Math.round(reglementCredit.montant * 100) / 100, reste);
     if (montant <= 0) {
       return NextResponse.json({ error: "Montant invalide" }, { status: 422 });
     }

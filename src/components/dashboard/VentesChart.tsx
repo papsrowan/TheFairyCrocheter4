@@ -55,7 +55,7 @@ function CustomTooltip({ active, payload, label }: {
           <span className="text-gray-600">{entry.name} :</span>
           <span className="font-medium text-gray-900">
             {entry.name === "CA"
-              ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(entry.value) + " XAF"
+              ? new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2}).format(entry.value) + " XAF"
               : entry.value}
           </span>
         </div>
