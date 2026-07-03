@@ -111,6 +111,19 @@ export default async function VentesPage({ searchParams }: PageProps) {
 
   const totalPages = Math.ceil(total / pageSize);
 
+  // Conserver tous les filtres actifs dans les liens de pagination
+  const lienPage = (p: number) => {
+    const params = new URLSearchParams();
+    params.set("page", String(p));
+    if (statut)         params.set("statut", statut);
+    if (statutPaiement) params.set("statutPaiement", statutPaiement);
+    if (search)         params.set("search", search);
+    if (dateDebut)      params.set("dateDebut", dateDebut);
+    if (dateFin)        params.set("dateFin", dateFin);
+    if (heure)          params.set("heure", heure);
+    return `?${params.toString()}`;
+  };
+
   return (
     <div className="space-y-6">
       {/* En-tête */}
@@ -238,7 +251,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
                         {vente.numero}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
-                        {formatDateTime(vente.dateFacture ?? vente.createdAt)}
+                        {formatDateTime(vente.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-sm hidden md:table-cell">
                         {vente.client
@@ -282,7 +295,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
             <div className="flex gap-2">
               {page > 1 && (
                 <Link
-                  href={`?page=${page - 1}&statut=${statut ?? ""}&search=${search ?? ""}`}
+                  href={lienPage(page - 1)}
                   className="text-sm px-3 py-1 rounded border hover:bg-muted transition-colors"
                 >
                   ← Précédent
@@ -290,7 +303,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
               )}
               {page < totalPages && (
                 <Link
-                  href={`?page=${page + 1}&statut=${statut ?? ""}&search=${search ?? ""}`}
+                  href={lienPage(page + 1)}
                   className="text-sm px-3 py-1 rounded border hover:bg-muted transition-colors"
                 >
                   Suivant →
