@@ -138,7 +138,7 @@ export default async function VenteDetailPage({ params }: Params) {
             <span className="text-muted-foreground flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" /> Date
             </span>
-            <span className="font-medium">{formatDateTime(vente.dateFacture ?? vente.createdAt)}</span>
+            <span className="font-medium">{formatDateTime(vente.createdAt)}</span>
           </div>
 
           <div className="flex flex-col gap-1">
