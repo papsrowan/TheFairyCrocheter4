@@ -58,8 +58,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-# Fuseau horaire par défaut (UTC+2). Surchargeable via la variable TZ du compose.
-ENV TZ=Africa/Johannesburg
+# Fuseau horaire par défaut (UTC+1, Cameroun). Surchargeable via la variable TZ du compose.
+ENV TZ=Africa/Douala
 
 # Créer un utilisateur non-root pour la sécurité (meilleure pratique)
 RUN addgroup --system --gid 1001 nodejs \
