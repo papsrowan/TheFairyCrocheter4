@@ -44,6 +44,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=1
 
+# Régénérer le client Prisma à partir du schéma COURANT (copié par `COPY . .`).
+# Sans ça, le client hérité de l'étape deps (mise en cache) peut être obsolète
+# quand le schéma a changé → erreurs "Property 'xxx' does not exist on PrismaClient".
+RUN node node_modules/prisma/build/index.js generate
+
 # Build de l'application (sortie en mode standalone)
 RUN npm run build
 
