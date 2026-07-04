@@ -357,8 +357,11 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
     } : {}),
     ...(payerPlusTard && dateEcheance ? { dateEcheance: new Date(dateEcheance).toISOString() } : {}),
     ...(paiementPartiel && montantPayeInput ? { montantPaye: parseCommaFloat(montantPayeInput) } : {}),
-    // Toujours envoyer la date ; si différente d'aujourd'hui = antidatage
-    dateFacture: dateFacture ? new Date(dateFacture).toISOString() : undefined,
+    // N'envoyer dateFacture QUE lors d'un vrai antidatage (date ≠ aujourd'hui).
+    // Sinon on laisse null → l'horodatage réel (createdAt) sert partout, pas 00h00.
+    ...(dateFacture && dateFacture !== todayStr
+      ? { dateFacture: new Date(dateFacture).toISOString() }
+      : {}),
   });
 
   const handleValider = () => {
