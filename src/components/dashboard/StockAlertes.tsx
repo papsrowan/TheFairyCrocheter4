@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import Link from "next/link";
+import { CheckCircle } from "lucide-react";
 
 interface ProduitAlerte {
   id:           string;
@@ -41,7 +42,7 @@ export function StockAlertes({ alertes }: Props) {
 
       {alertes.length === 0 ? (
         <div className="px-5 py-8 text-center">
-          <p className="text-2xl mb-1">✓</p>
+          <CheckCircle className="h-7 w-7 mx-auto mb-1 text-emerald-500" />
           <p className="text-sm text-gray-500">Tous les stocks sont suffisants</p>
         </div>
       ) : (

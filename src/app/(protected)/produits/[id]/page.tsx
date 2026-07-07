@@ -43,6 +43,10 @@ export default async function ProduitDetailPage({ params }: Params) {
           orderBy: { createdAt: "asc" },
           take: 500,
         },
+        lots: {
+          orderBy: { dateEntree: "desc" },
+          include: { variante: { select: { couleur: true } } },
+        },
         _count: { select: { lignesVente: true } },
       },
     }),
@@ -255,6 +259,52 @@ export default async function ProduitDetailPage({ params }: Params) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Arrivages / Lots de stock ── */}
+      {produit.lots.length > 0 && (
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-semibold">Arrivages (lots de stock)</h2>
+              <p className="text-xs text-muted-foreground">Chaque entrée de stock est un lot daté distinguable</p>
+            </div>
+            <div className="flex gap-2">
+              <a href={`/api/produits/${produit.id}/lots/export?format=csv`}
+                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors">
+                Export Excel
+              </a>
+              <a href={`/api/produits/${produit.id}/lots/export?format=pdf`} target="_blank" rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
+                Export PDF
+              </a>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Référence</th>
+                  <th>Date d&apos;arrivée</th>
+                  <th className="hidden sm:table-cell">Couleur</th>
+                  <th className="text-center">Quantité</th>
+                  <th className="text-right hidden sm:table-cell">Prix d&apos;achat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {produit.lots.map((l) => (
+                  <tr key={l.id}>
+                    <td className="font-mono text-xs">{l.reference}</td>
+                    <td>{formatDate(l.dateEntree)}</td>
+                    <td className="hidden sm:table-cell">{l.variante?.couleur ?? "—"}</td>
+                    <td className="text-center font-medium">{l.quantite}</td>
+                    <td className="text-right hidden sm:table-cell">{l.prixAchat != null ? formatCurrency(l.prixAchat) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

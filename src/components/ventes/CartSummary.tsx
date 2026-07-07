@@ -512,7 +512,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
               )}
               {item.prixGrosApplique && (
                 <div className="mt-1 flex items-center justify-between text-xs text-emerald-600">
-                  <span className="font-medium">✓ Prix de gros appliqué</span>
+                  <span className="font-medium inline-flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Prix de gros appliqué</span>
                   <button onClick={() => refuserPrixGros(cartKey(item))} className="underline hover:no-underline">Annuler</button>
                 </div>
               )}

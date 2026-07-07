@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import StockAjustementModal from "./StockAjustementModal";
+import { Archive, Trash2, AlertTriangle } from "lucide-react";
 
 interface VarianteOpt { id: string; couleur: string; description?: string | null; stockActuel: number }
 
@@ -49,7 +50,7 @@ export default function ProduitDetailClient({
 
   async function handleSupprimer() {
     const confirm1 = confirm(
-      `⚠️ SUPPRESSION DÉFINITIVE\n\nSupprimer "${produitNom}" effacera toutes ses données (stock, mouvements, variantes).\n\nCette action est IRRÉVERSIBLE.\n\nContinuer ?`
+      `SUPPRESSION DÉFINITIVE\n\nSupprimer "${produitNom}" effacera toutes ses données (stock, mouvements, variantes).\n\nCette action est IRRÉVERSIBLE.\n\nContinuer ?`
     );
     if (!confirm1) return;
     const confirm2 = confirm(`Dernière confirmation : supprimer définitivement "${produitNom}" ?`);
@@ -99,7 +100,7 @@ export default function ProduitDetailClient({
 
         {enAlerte && (
           <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-            ⚠ Stock sous le seuil minimum ({stockMinimum})
+            <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />Stock sous le seuil minimum ({stockMinimum})
           </div>
         )}
 
@@ -128,7 +129,7 @@ export default function ProduitDetailClient({
                 disabled={archiving}
                 className="w-full px-4 py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors"
               >
-                {archiving ? "Archivage..." : "📦 Archiver le produit"}
+                {archiving ? "Archivage..." : <><Archive className="h-4 w-4 inline mr-1" />Archiver le produit</>}
               </button>
             </>
           )}
@@ -146,7 +147,7 @@ export default function ProduitDetailClient({
                   disabled={purging}
                   className="w-full px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
-                  {purging ? "Suppression..." : "🗑️ Supprimer définitivement"}
+                  {purging ? "Suppression..." : <><Trash2 className="h-4 w-4 inline mr-1" />Supprimer définitivement</>}
                 </button>
               </div>
             </>

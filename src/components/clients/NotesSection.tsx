@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { hasMinRole } from "@/lib/security/rbac";
 
@@ -148,7 +149,7 @@ export function NotesSection({
                       className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all text-xs shrink-0"
                       title="Supprimer"
                     >
-                      ✕
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>

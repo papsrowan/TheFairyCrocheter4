@@ -327,7 +327,7 @@ export async function POST(req: NextRequest) {
         data: {
           entityType: "vente",
           entityId:   vente.id,
-          contenu:    `⚠️ Prix spécial appliqué par ${session.user.prenom ?? ""} ${session.user.nom} : ${venteData.prixSpecial.toLocaleString("fr-FR")} XAF (calculé : ${totalCalculeRef.toLocaleString("fr-FR")} XAF)${venteData.motifPrixSpecial ? ` — Motif : "${venteData.motifPrixSpecial}"` : ""}`,
+          contenu:    `Prix spécial appliqué par ${session.user.prenom ?? ""} ${session.user.nom} : ${venteData.prixSpecial.toLocaleString("fr-FR")} XAF (calculé : ${totalCalculeRef.toLocaleString("fr-FR")} XAF)${venteData.motifPrixSpecial ? ` — Motif : "${venteData.motifPrixSpecial}"` : ""}`,
           userId:     session.user.id,
         },
       });

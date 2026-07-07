@@ -399,7 +399,7 @@ export function ProductSearch() {
                 <div className="flex items-center justify-between w-full gap-1">
                   <span className="text-xs font-semibold text-foreground leading-tight line-clamp-2 flex-1">{produit.nom}</span>
                   {produit.stockActuel <= produit.stockMinimum && produit.stockActuel > 0 && (
-                    <span className="text-[9px] bg-amber-100 text-amber-700 rounded px-1 shrink-0">⚠</span>
+                    <span className="bg-amber-100 text-amber-700 rounded px-1 shrink-0"><AlertTriangle className="h-2.5 w-2.5 inline" /></span>
                   )}
                 </div>
                 <span className="text-sm font-bold text-primary">{new Intl.NumberFormat("fr-FR").format(produit.prixVente)} XAF</span>

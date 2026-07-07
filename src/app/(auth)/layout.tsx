@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Zap, Package, BarChart3, FileText } from "lucide-react";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -36,13 +37,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* Features */}
           <div className="mt-10 space-y-3 w-full max-w-xs">
             {[
-              { icon: "⚡", text: "Caisse POS rapide" },
-              { icon: "📦", text: "Gestion du stock en temps réel" },
-              { icon: "📊", text: "Dashboard analytique" },
-              { icon: "📄", text: "Factures PDF automatiques" },
+              { Icon: Zap, text: "Caisse POS rapide" },
+              { Icon: Package, text: "Gestion du stock en temps réel" },
+              { Icon: BarChart3, text: "Dashboard analytique" },
+              { Icon: FileText, text: "Factures PDF automatiques" },
             ].map((f) => (
               <div key={f.text} className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5 backdrop-blur-sm border border-white/10">
-                <span className="text-lg">{f.icon}</span>
+                <f.Icon className="h-5 w-5 shrink-0" />
                 <span className="text-sm text-white/90 font-medium">{f.text}</span>
               </div>
             ))}

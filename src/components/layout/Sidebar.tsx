@@ -13,7 +13,7 @@ import type { Permission } from "@/lib/security/rbac";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, TrendingUp,
   FileText, Settings, StickyNote, UserCog, LogOut, X, User, ScanLine,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ShoppingBag,
 } from "lucide-react";
 
 interface NavItem {
@@ -28,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard",        label: "Dashboard",        icon: LayoutDashboard, permission: "dashboard:read",    color: "text-violet-500" },
   { href: "/ventes/nouvelle",  label: "Caisse / Vente",   icon: ScanLine,        permission: "ventes:create",     color: "text-rose-500"   },
   { href: "/ventes",           label: "Historique ventes", icon: ShoppingCart,   permission: "ventes:read",       color: "text-orange-500" },
+  { href: "/commandes-en-ligne", label: "Commandes en ligne", icon: ShoppingBag, permission: "ventes:read",     color: "text-teal-500"   },
   { href: "/produits",     label: "Produits & Stock", icon: Package,         permission: "produits:read",     color: "text-amber-500"  },
   { href: "/clients",      label: "Clients",          icon: Users,           permission: "clients:read",      color: "text-sky-500"    },
   { href: "/finances",     label: "Finances",         icon: TrendingUp,      permission: "finances:read",     color: "text-emerald-500"},

@@ -12,6 +12,7 @@ import Image from "next/image";
 import type { Role } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { ClickableRow } from "@/components/shared/ClickableRow";
+import { Package, AlertTriangle, Archive } from "lucide-react";
 
 interface SearchParams {
   page?:        string;
@@ -105,7 +106,7 @@ export default async function ProduitsPage({
             href="/produits/archives"
             className="relative z-10 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
           >
-            📦 Archives
+<Archive className="h-4 w-4" /> Archives
           </Link>
           {canCreate && (
             <Link
@@ -121,8 +122,8 @@ export default async function ProduitsPage({
       {/* ── Alertes de stock ────────────────────────────────────────── */}
       {nbAlertes > 0 && !alerteOnly && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-          <span className="text-amber-600 font-medium">
-            ⚠ {nbAlertes} produit{nbAlertes > 1 ? "s" : ""} sous le seuil minimum
+          <span className="text-amber-600 font-medium inline-flex items-center gap-1">
+            <AlertTriangle className="h-4 w-4" /> {nbAlertes} produit{nbAlertes > 1 ? "s" : ""} sous le seuil minimum
           </span>
           <Link
             href="/produits?alerte=true"
@@ -221,7 +222,7 @@ export default async function ProduitsPage({
                         ) : produit.couleur ? (
                           <div className="w-full h-full" style={{ backgroundColor: produit.couleur }} />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">📦</div>
+                          <div className="w-full h-full flex items-center justify-center text-gray-300"><Package className="h-4 w-4" /></div>
                         )}
                       </div>
                       <div>
@@ -246,7 +247,7 @@ export default async function ProduitsPage({
                   <td className="text-center text-gray-500 text-sm hidden lg:table-cell">{produit.tauxTVA}%</td>
                   <td className="text-center">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${enAlerte ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                      {enAlerte && "⚠ "}{produit.stockActuel}
+                      {enAlerte && <AlertTriangle className="h-3 w-3" />}{produit.stockActuel}
                     </span>
                   </td>
                   <td className="text-center hidden sm:table-cell">

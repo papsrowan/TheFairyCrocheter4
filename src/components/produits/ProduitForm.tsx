@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Upload, Camera, Loader2, AlertCircle, X, Plus, Palette,
+  Upload, Camera, Loader2, AlertCircle, X, Plus, Palette, Barcode,
 } from "lucide-react";
 
 const parseCommaFloat = (s: string) => parseFloat(s.replace(",", "."));
@@ -489,8 +489,8 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
 
       {/* ── Note barcode ── */}
       {mode === "create" && (
-        <p className="text-xs text-muted-foreground bg-secondary rounded-xl px-4 py-2.5">
-          🔖 Un code-barres EAN-13 sera généré automatiquement et assigné à ce produit.
+        <p className="text-xs text-muted-foreground bg-secondary rounded-xl px-4 py-2.5 inline-flex items-center gap-1.5">
+          <Barcode className="h-3.5 w-3.5 shrink-0" /> Un code-barres EAN-13 sera généré automatiquement et assigné à ce produit.
         </p>
       )}
 

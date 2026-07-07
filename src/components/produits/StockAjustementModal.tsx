@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 
 interface VarianteOpt { id: string; couleur: string; description?: string | null; stockActuel: number }
 
@@ -204,7 +205,7 @@ export default function StockAjustementModal({
             }`}>
               <span className="text-sm text-gray-600">Stock après ajustement</span>
               <span className={`text-xl font-bold ${stockPrevu < 0 ? "text-red-600" : "text-green-700"}`}>
-                {stockPrevu < 0 ? "⚠ " : ""}{stockPrevu}
+                {stockPrevu < 0 && <AlertTriangle className="h-4 w-4 inline mr-1" />}{stockPrevu}
               </span>
             </div>
           )}

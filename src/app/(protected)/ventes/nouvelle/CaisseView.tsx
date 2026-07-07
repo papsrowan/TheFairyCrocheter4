@@ -424,7 +424,7 @@ export function CaisseView() {
               items.length > 0 && "hidden"
             )}>
               <div className="max-w-xs space-y-3 text-muted-foreground">
-                <p className="text-3xl">🔍</p>
+                <Search className="h-8 w-8 mx-auto" />
                 <p className="font-medium">Recherchez un produit</p>
                 <p className="text-sm">Tapez le nom ou scannez un code-barres.</p>
                 <div className="text-xs space-y-1 bg-muted rounded-lg p-3 text-left font-mono">

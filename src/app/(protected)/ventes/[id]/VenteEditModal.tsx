@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import {
   X, Plus, Trash2, Minus, Percent, Search,
-  Loader2, CheckCircle, User, CreditCard, Banknote, ArrowLeftRight,
+  Loader2, CheckCircle, User, CreditCard, Banknote, ArrowLeftRight, AlertTriangle,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export function VenteEditModal({ vente, onClose }: Props) {
           </div>
           {total !== calcTotal(vente.lignes.map((l, i) => ({ _key: String(i), ...l })), vente.remiseGlobale) && (
             <p className="text-xs text-amber-600 mb-3">
-              ⚠ Différence : {formatCurrency(total - calcTotal(vente.lignes.map((l, i) => ({ _key: String(i), ...l })), vente.remiseGlobale))} XAF par rapport à la vente initiale
+<AlertTriangle className="h-3 w-3 inline mr-1" />Différence : {formatCurrency(total - calcTotal(vente.lignes.map((l, i) => ({ _key: String(i), ...l })), vente.remiseGlobale))} XAF par rapport à la vente initiale
             </p>
           )}
           <div className="flex gap-3">

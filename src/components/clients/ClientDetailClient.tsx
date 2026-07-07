@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Phone } from "lucide-react";
 
 interface Props {
   clientId:         string;
@@ -112,7 +113,7 @@ export function ClientDetailClient({
             <span className="text-gray-800 break-all">{email ?? <span className="text-gray-400">—</span>}</span>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-gray-400 w-4 mt-0.5">☎</span>
+            <Phone className="text-gray-400 h-4 w-4 mt-0.5 shrink-0" />
             <span className="text-gray-800">{telephone ?? <span className="text-gray-400">—</span>}</span>
           </div>
         </div>

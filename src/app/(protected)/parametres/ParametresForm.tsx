@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save, Building2 } from "lucide-react";
+import { Loader2, Save, Building2, Check } from "lucide-react";
 
 interface Entreprise {
   id: string; nom: string; adresse: string; codePostal: string; ville: string;
@@ -154,7 +154,7 @@ export function ParametresForm({ entreprise, canEdit }: Props) {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {loading ? "Enregistrement..." : "Enregistrer"}
           </button>
-          {saved && <span className="text-sm text-emerald-600 font-medium">✓ Paramètres sauvegardés</span>}
+          {saved && <span className="text-sm text-emerald-600 font-medium inline-flex items-center gap-1"><Check className="h-4 w-4" /> Paramètres sauvegardés</span>}
         </div>
       )}
 

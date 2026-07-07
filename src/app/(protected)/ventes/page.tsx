@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hasPermission } from "@/lib/security/rbac";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
-import { Plus, Search, Receipt, TrendingUp } from "lucide-react";
+import { Plus, Search, Receipt, TrendingUp, Clock } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { ClickableRow } from "@/components/shared/ClickableRow";
 
@@ -271,7 +271,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
                       <td className="px-4 py-3">
                         {vente.statutPaiement === "EN_ATTENTE" && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mb-1">
-                            ⏳ En attente
+<Clock className="h-3 w-3" /> En attente
                           </span>
                         )}
                         <Link href={`/ventes/${vente.id}`} className="relative z-10 text-xs text-primary hover:underline block">

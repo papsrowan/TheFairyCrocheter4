@@ -11,6 +11,7 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import type { Role } from "@prisma/client";
 import { DesarchiverButton } from "./DesarchiverButton";
+import { Package } from "lucide-react";
 
 export const metadata: Metadata = { title: "Produits archivés" };
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export default async function ProduitsArchivesPage() {
                         ) : produit.couleur ? (
                           <div className="w-full h-full" style={{ backgroundColor: produit.couleur }} />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">📦</div>
+                          <div className="w-full h-full flex items-center justify-center text-gray-300"><Package className="h-4 w-4" /></div>
                         )}
                       </div>
                       <div>

@@ -261,7 +261,7 @@ export function FacturePDF({ vente, entreprise }: FacturePDFProps) {
         {/* Mode de paiement */}
         <View style={styles.paymentBadge}>
           <Text style={styles.paymentText}>
-            ✓ {MODES_PAIEMENT[vente.modePaiement] ?? vente.modePaiement}
+            {MODES_PAIEMENT[vente.modePaiement] ?? vente.modePaiement}
           </Text>
         </View>
 
