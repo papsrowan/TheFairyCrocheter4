@@ -39,6 +39,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      # Fuseau horaire (UTC+1, Cameroun). Surchargeable via TZ dans un .env.
+      TZ: ${TZ:-Africa/Douala}
       AUTO_SEED: ${AUTO_SEED:-true}
       # DATABASE_URL construit depuis les vars DB — toujours pointer vers le service 'db'
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@db:5432/${POSTGRES_DB:-fairycrocheter}?schema=public

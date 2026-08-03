@@ -55,7 +55,7 @@ RUN npm run build
 # ── Stage 3 : Runner (image finale légère) ───────────────────────────────────
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache libc6-compat openssl curl
+RUN apk add --no-cache libc6-compat openssl curl tzdata
 
 WORKDIR /app
 
@@ -63,6 +63,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+# Fuseau horaire par défaut (UTC+1, Cameroun). Surchargeable via la variable TZ du compose.
+ENV TZ=Africa/Douala
 
 # Créer un utilisateur non-root pour la sécurité (meilleure pratique)
 RUN addgroup --system --gid 1001 nodejs \
