@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { cn } from "@/lib/utils/cn";
+import { CA12MoisChart } from "@/components/finances/CA12MoisChart";
 
 export const metadata: Metadata = { title: "Finances" };
 export const dynamic = "force-dynamic";
@@ -129,6 +130,64 @@ export default async function FinancesPage() {
   const evolutionCA = caPrecedent > 0
     ? Math.round(((caMois - caPrecedent) / caPrecedent) * 100)
     : null;
+
+  // ── Historique mensuel (sur plusieurs mois / années) ────────────────────────
+  const [ecrituresParMois, cogsParMois] = await Promise.all([
+    prisma.$queryRaw<Array<{ mois: Date; type: string; total: number }>>`
+      SELECT DATE_TRUNC('month', date) AS mois, type::text AS type, SUM(montant)::float AS total
+      FROM ecritures_financieres
+      GROUP BY 1, 2
+    `,
+    prisma.$queryRaw<Array<{ mois: Date; cogs: number }>>`
+      SELECT DATE_TRUNC('month', v.created_at) AS mois, SUM(lv.quantite * p.prix_achat)::float AS cogs
+      FROM lignes_ventes lv
+      JOIN ventes v ON v.id = lv.vente_id
+      JOIN produits p ON p.id = lv.produit_id
+      WHERE v.statut = 'COMPLETEE'
+      GROUP BY 1
+    `,
+  ]);
+
+  const histMap = new Map<string, { recette: number; remb: number; depense: number; cogs: number }>();
+  const cleMois = (d: Date) => new Date(d).toISOString().slice(0, 7); // "AAAA-MM"
+  const ligneHist = (k: string) => {
+    if (!histMap.has(k)) histMap.set(k, { recette: 0, remb: 0, depense: 0, cogs: 0 });
+    return histMap.get(k)!;
+  };
+  for (const e of ecrituresParMois) {
+    const r = ligneHist(cleMois(e.mois));
+    if (e.type === "RECETTE_VENTE") r.recette += e.total;
+    else if (e.type === "REMBOURSEMENT") r.remb += e.total;
+    else if (e.type === "DEPENSE") r.depense += e.total;
+  }
+  for (const c of cogsParMois) ligneHist(cleMois(c.mois)).cogs += c.cogs ?? 0;
+
+  const historique = Array.from(histMap.entries())
+    .map(([mois, v]) => {
+      const caNet = v.recette + v.remb;
+      const depenses = v.depense + v.cogs;
+      return { mois, caNet, depenses, benefice: caNet - depenses };
+    })
+    .sort((a, b) => b.mois.localeCompare(a.mois));
+
+  // Regrouper par année (année la plus récente en premier)
+  const histParAnnee = new Map<string, typeof historique>();
+  for (const h of historique) {
+    const an = h.mois.slice(0, 4);
+    if (!histParAnnee.has(an)) histParAnnee.set(an, []);
+    histParAnnee.get(an)!.push(h);
+  }
+  const anneesHist = Array.from(histParAnnee.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  const nomMois = (k: string) =>
+    new Date(k + "-01T12:00:00").toLocaleDateString("fr-FR", { month: "long" });
+
+  // Série CA sur les 12 derniers mois (mois sans activité = 0)
+  const chart12Mois = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const row = histMap.get(key);
+    return { mois: key, ca: row ? row.recette + row.remb : 0 };
+  });
 
   // Jours des 7 derniers jours
   const joursLabels = Array.from({ length: 7 }, (_, i) => {
@@ -341,6 +400,71 @@ export default async function FinancesPage() {
           )}
         </div>
       </div>
+
+      {/* ── Diagramme CA sur 12 mois ── */}
+      <CA12MoisChart data={chart12Mois} titre="Chiffre d'affaires — 12 derniers mois" />
+
+      {/* ── Historique financier mensuel (plusieurs mois / années) ── */}
+      {historique.length > 0 && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            <h2 className="font-semibold text-sm">Historique financier — par mois</h2>
+          </div>
+          <div className="space-y-7">
+            {anneesHist.map(([annee, moisAnnee]) => {
+              const tCa  = moisAnnee.reduce((s, m) => s + m.caNet, 0);
+              const tDep = moisAnnee.reduce((s, m) => s + m.depenses, 0);
+              const tBen = tCa - tDep;
+              return (
+                <div key={annee}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-serif text-lg font-bold text-foreground">{annee}</h3>
+                    <span className={cn("text-sm font-semibold", tBen >= 0 ? "text-primary" : "text-destructive")}>
+                      Bénéfice annuel : {formatCurrency(tBen)}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-muted-foreground border-b">
+                          <th className="text-left py-2 font-medium">Mois</th>
+                          <th className="text-right font-medium">CA net</th>
+                          <th className="text-right font-medium hidden sm:table-cell">Dépenses</th>
+                          <th className="text-right font-medium">Bénéfice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {moisAnnee.map((m) => (
+                          <tr key={m.mois} className="border-b border-border/40">
+                            <td className="py-2 capitalize">{nomMois(m.mois)}</td>
+                            <td className="text-right tabular-nums">{formatCurrency(m.caNet)}</td>
+                            <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">{formatCurrency(m.depenses)}</td>
+                            <td className={cn("text-right tabular-nums font-semibold", m.benefice >= 0 ? "text-primary" : "text-destructive")}>
+                              {formatCurrency(m.benefice)}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="font-bold">
+                          <td className="py-2">Total {annee}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(tCa)}</td>
+                          <td className="text-right tabular-nums hidden sm:table-cell">{formatCurrency(tDep)}</td>
+                          <td className={cn("text-right tabular-nums", tBen >= 0 ? "text-primary" : "text-destructive")}>
+                            {formatCurrency(tBen)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            CA net = ventes − annulations. Dépenses = charges saisies + coût d&apos;achat des produits vendus.
+          </p>
+        </div>
+      )}
 
       {/* Liens rapides */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

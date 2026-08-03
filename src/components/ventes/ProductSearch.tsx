@@ -25,8 +25,7 @@ interface SearchResult {
   nom: string;
   codeBarres?: string;
   prixVente: number;
-  prixGros?: number | null;
-  qtePrixGros?: number | null;
+  paliers?: { quantiteMin: number; prixUnitaire: number }[];
   tauxTVA: number;
   stockActuel: number;
   stockMinimum: number;
@@ -137,10 +136,7 @@ export function ProductSearch() {
           couleur:     variante.couleur,
           quantite:    qte,
           prixBase:    produit.prixVente,
-          prixGros:    produit.prixGros,
-          qtePrixGros: produit.qtePrixGros,
-          prixGrosApplique: false,
-          prixUnitaire: produit.prixVente,
+          paliers:     produit.paliers ?? [],
           remise:      0,
           tauxTVA:     tva,
         });
@@ -156,10 +152,7 @@ export function ProductSearch() {
         couleur:     null,
         quantite:    qteChoisie,
         prixBase:    produit.prixVente,
-        prixGros:    produit.prixGros,
-        qtePrixGros: produit.qtePrixGros,
-        prixGrosApplique: false,
-        prixUnitaire: produit.prixVente,
+        paliers:     produit.paliers ?? [],
         remise:      0,
         tauxTVA:     tva,
       });
@@ -226,9 +219,9 @@ export function ProductSearch() {
               <div>
                 <p className="font-bold text-base">{pending.nom}</p>
                 <p className="text-sm text-muted-foreground">{formatCurrency(pending.prixVente)} / unité</p>
-                {pending.prixGros && pending.qtePrixGros && (
+                {pending.paliers && pending.paliers.length > 0 && (
                   <p className="text-xs text-emerald-600 font-medium mt-0.5">
-                    Prix de gros : {formatCurrency(pending.prixGros)} dès {pending.qtePrixGros} u.
+                    Prix dégressif : {pending.paliers.map((p) => `dès ${p.quantiteMin} → ${formatCurrency(p.prixUnitaire)}`).join(" · ")}
                   </p>
                 )}
               </div>

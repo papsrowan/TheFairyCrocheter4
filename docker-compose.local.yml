@@ -11,3 +11,8 @@ services:
       NEXTAUTH_URL:          http://localhost:3002
       NEXT_PUBLIC_APP_URL:   http://localhost:3002
       DOCUMENTS_BASE_URL:    http://localhost:3002/documents
+
+  # Expose la base Postgres sur le PC pour que la boutique (npm run dev) s'y connecte
+  db:
+    ports:
+      - "5432:5432"

@@ -10,7 +10,7 @@ import { hasPermission } from "@/lib/security/rbac";
 import { audit, AUDIT_ACTIONS } from "@/lib/security/audit";
 import { createProduitSchema } from "@/lib/validations/produit.schema";
 import { generateBarcode } from "@/lib/utils/barcode";
-import { genLotRef } from "@/lib/utils/lot";
+import { genArrivageRef } from "@/lib/utils/lot";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { Role, Prisma } from "@prisma/client";
@@ -139,6 +139,9 @@ export async function POST(req: NextRequest) {
         ...(vars.length > 0 ? {
           variantes: { create: vars.map(v => ({ couleur: v.couleur, description: v.description ?? null, stockActuel: v.stockActuel })) },
         } : {}),
+        ...((data.paliers ?? []).length > 0 ? {
+          paliers: { create: (data.paliers ?? []).map(p => ({ quantiteMin: p.quantiteMin, prixUnitaire: p.prixUnitaire })) },
+        } : {}),
       },
       include: { categorie: true, variantes: true },
     });
@@ -163,23 +166,25 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Lot(s) initial(aux) — un arrivage daté par variante, ou un global sinon
-  if (produit.variantes.length > 0) {
-    for (const v of produit.variantes) {
-      if (v.stockActuel > 0) {
-        await prisma.lotStock.create({ data: {
-          produitId: produit.id, varianteId: v.id, reference: genLotRef(),
-          quantite: v.stockActuel, prixAchat: produit.prixAchat ?? null,
-          motif: "Stock initial à la création", userId: session.user.id,
-        }});
-      }
-    }
-  } else if (data.stockActuel > 0) {
-    await prisma.lotStock.create({ data: {
-      produitId: produit.id, reference: genLotRef(),
-      quantite: data.stockActuel, prixAchat: produit.prixAchat ?? null,
-      motif: "Stock initial à la création", userId: session.user.id,
-    }});
+  // Arrivage initial (#1) — regroupe les couleurs+quantités saisies à la création.
+  const lignesInit = produit.variantes.length > 0
+    ? produit.variantes
+        .filter((v) => v.stockActuel > 0)
+        .map((v) => ({ varianteId: v.id, couleur: v.couleur, quantite: v.stockActuel, prixAchat: produit.prixAchat ?? null }))
+    : data.stockActuel > 0
+      ? [{ varianteId: null, couleur: produit.couleur ?? "—", quantite: data.stockActuel, prixAchat: produit.prixAchat ?? null }]
+      : [];
+
+  if (lignesInit.length > 0) {
+    await prisma.arrivage.create({
+      data: {
+        produitId:  produit.id,
+        reference:  genArrivageRef(),
+        motif:      "Arrivage initial (création du produit)",
+        userId:     session.user.id,
+        lignes:     { create: lignesInit },
+      },
+    });
   }
 
   await audit({

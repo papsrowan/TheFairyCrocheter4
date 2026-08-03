@@ -9,6 +9,7 @@ import ProduitForm from "@/components/produits/ProduitForm";
 import ProduitDetailClient from "@/components/produits/ProduitDetailClient";
 import MouvementsStockTable from "@/components/produits/MouvementsStockTable";
 import { BarcodeDisplay } from "@/components/produits/BarcodeDisplay";
+import { NouvelArrivageButton } from "./NouvelArrivageButton";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import { Package, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
@@ -43,10 +44,11 @@ export default async function ProduitDetailPage({ params }: Params) {
           orderBy: { createdAt: "asc" },
           take: 500,
         },
-        lots: {
+        arrivages: {
           orderBy: { dateEntree: "desc" },
-          include: { variante: { select: { couleur: true } } },
+          include: { lignes: true },
         },
+        paliers: { orderBy: { quantiteMin: "asc" } },
         _count: { select: { lignesVente: true } },
       },
     }),
@@ -109,6 +111,7 @@ export default async function ProduitDetailPage({ params }: Params) {
       description: v.description ?? "",
       stockActuel: v.stockActuel,
     })),
+    paliers: produit.paliers.map((p) => ({ quantiteMin: p.quantiteMin, prixUnitaire: p.prixUnitaire })),
   };
 
   const mouvements = produit.mouvementsStock.map((m) => ({
@@ -263,51 +266,71 @@ export default async function ProduitDetailPage({ params }: Params) {
         </div>
       )}
 
-      {/* ── Arrivages / Lots de stock ── */}
-      {produit.lots.length > 0 && (
-        <div className="card p-5 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="font-semibold">Arrivages (lots de stock)</h2>
-              <p className="text-xs text-muted-foreground">Chaque entrée de stock est un lot daté distinguable</p>
-            </div>
-            <div className="flex gap-2">
-              <a href={`/api/produits/${produit.id}/lots/export?format=csv`}
-                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors">
-                Export Excel
-              </a>
-              <a href={`/api/produits/${produit.id}/lots/export?format=pdf`} target="_blank" rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
-                Export PDF
-              </a>
-            </div>
+      {/* ── Arrivages (apports de stock datés) ── */}
+      <div className="card p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="font-semibold">Arrivages</h2>
+            <p className="text-xs text-muted-foreground">
+              Chaque apport de stock (une ou plusieurs couleurs) est regroupé dans un lot daté.
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Référence</th>
-                  <th>Date d&apos;arrivée</th>
-                  <th className="hidden sm:table-cell">Couleur</th>
-                  <th className="text-center">Quantité</th>
-                  <th className="text-right hidden sm:table-cell">Prix d&apos;achat</th>
-                </tr>
-              </thead>
-              <tbody>
-                {produit.lots.map((l) => (
-                  <tr key={l.id}>
-                    <td className="font-mono text-xs">{l.reference}</td>
-                    <td>{formatDate(l.dateEntree)}</td>
-                    <td className="hidden sm:table-cell">{l.variante?.couleur ?? "—"}</td>
-                    <td className="text-center font-medium">{l.quantite}</td>
-                    <td className="text-right hidden sm:table-cell">{l.prixAchat != null ? formatCurrency(l.prixAchat) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex gap-2">
+            {produit.arrivages.length > 0 && (
+              <>
+                <a href={`/api/produits/${produit.id}/arrivages/export?format=csv`}
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors">
+                  Export Excel
+                </a>
+                <a href={`/api/produits/${produit.id}/arrivages/export?format=pdf`} target="_blank" rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
+                  Export PDF
+                </a>
+              </>
+            )}
+            {canEdit && produit.actif && (
+              <NouvelArrivageButton
+                produitId={produit.id}
+                couleursExistantes={produit.variantes.map((v) => ({ couleur: v.couleur, description: v.description }))}
+              />
+            )}
           </div>
         </div>
-      )}
+
+        {produit.arrivages.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Aucun arrivage pour le moment.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {produit.arrivages.map((a) => {
+              const total = a.lignes.reduce((s, l) => s + l.quantite, 0);
+              return (
+                <div key={a.id} className="rounded-xl border p-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-primary">{a.reference}</span>
+                      <span className="text-xs text-muted-foreground">{formatDate(a.dateEntree)}</span>
+                      {a.motif && <span className="text-xs text-muted-foreground italic">· {a.motif}</span>}
+                    </div>
+                    <span className="text-xs font-semibold bg-secondary px-2 py-0.5 rounded-full">{total} u.</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {a.lignes.map((l) => (
+                      <span key={l.id} className="inline-flex items-center gap-1.5 rounded-lg bg-muted/50 px-2 py-1 text-xs">
+                        <span className="h-3 w-3 rounded-full border" style={{ backgroundColor: l.couleur }} />
+                        <span className="font-medium">{l.couleur}</span>
+                        <span className="text-muted-foreground">×{l.quantite}</span>
+                        {l.prixAchat != null && <span className="text-muted-foreground">· {formatCurrency(l.prixAchat)}</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Formulaire / Infos */}

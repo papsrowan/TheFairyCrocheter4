@@ -258,8 +258,6 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
     sousTotal, total, montantTVA,
     updateQuantite, updateRemise, removeItem,
     setRemiseGlobale, setModePaiement, clearClient, clearCart,
-    confirmerPrixGros, refuserPrixGros,
-    confirmerPrixGrosGroupe, refuserPrixGrosGroupe,
   } = useCartStore();
 
   const { addToQueue } = useOfflineStore();
@@ -267,22 +265,6 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
-  // Détection prix de gros groupé (multi-couleurs même produit)
-  const groupesPrixGros = (() => {
-    const map: Record<string, { nom: string; prixGros: number; qtePrixGros: number; totalQte: number; dejaApplique: boolean }> = {};
-    for (const item of items) {
-      if (!item.prixGros || !item.qtePrixGros) continue;
-      if (!map[item.produitId]) {
-        map[item.produitId] = { nom: item.nom, prixGros: item.prixGros, qtePrixGros: item.qtePrixGros, totalQte: 0, dejaApplique: true };
-      }
-      map[item.produitId].totalQte += item.quantite;
-      if (!item.prixGrosApplique) map[item.produitId].dejaApplique = false;
-    }
-    // Ne retourner que ceux qui atteignent le seuil et ne sont pas encore appliqués
-    return Object.entries(map)
-      .filter(([, g]) => g.totalQte >= g.qtePrixGros && !g.dejaApplique)
-      .map(([produitId, g]) => ({ produitId, ...g }));
-  })();
   const role = session?.user?.role as string | undefined;
   const peutPrixSpecial = role === "SUPER_ADMIN" || role === "MANAGER";
 
@@ -441,23 +423,6 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
           </div>
         )}
 
-        {/* Bandeaux prix de gros groupé (multi-couleurs) */}
-        {groupesPrixGros.map((g) => (
-          <div key={g.produitId} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 text-xs">
-            <span className="flex-1 text-emerald-700 dark:text-emerald-300 font-medium">
-              Prix gros dispo · <strong>{g.nom}</strong> ({g.totalQte} u. au total) → {formatCurrency(g.prixGros)}/u
-            </span>
-            <button onClick={() => confirmerPrixGrosGroupe(g.produitId)}
-              className="px-2 py-1 rounded bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors">
-              Appliquer
-            </button>
-            <button onClick={() => refuserPrixGrosGroupe(g.produitId)}
-              className="px-2 py-1 rounded border border-emerald-300 text-emerald-600 hover:bg-emerald-100 transition-colors">
-              Non
-            </button>
-          </div>
-        ))}
-
         {/* Articles */}
         <div className="flex-1 overflow-y-auto divide-y divide-border">
           {items.map((item) => (
@@ -471,26 +436,19 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                       <span className="text-xs text-muted-foreground">{item.couleur}</span>
                     </div>
                   )}
-                  {/* Détail calcul prix de gros */}
-                  {item.prixGrosApplique && item.prixGros && item.qtePrixGros ? (
-                    <div className="text-xs space-y-0.5 mt-0.5">
-                      <span className="inline-block bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                        Prix gros actif
-                      </span>
-                      <p className="text-muted-foreground font-mono">
-                        {item.quantite}×{formatCurrency(item.prixGros!)}
-                      </p>
-                      {item.tauxTVA > 0 && <p className="text-muted-foreground">TVA {item.tauxTVA}%</p>}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      {formatCurrency(item.prixBase)} / unité
-                      {item.prixGros && item.qtePrixGros && (
-                        <span className="ml-1 text-amber-500">· gros dès {item.qtePrixGros} u. → {formatCurrency(item.prixGros)}</span>
-                      )}
-                      {item.tauxTVA > 0 && ` · TVA ${item.tauxTVA}%`}
-                    </p>
-                  )}
+                  {/* Prix unitaire effectif (paliers appliqués automatiquement) */}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {item.prixUnitaire < item.prixBase ? (
+                      <>
+                        <span className="inline-block bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[10px] mr-1">Prix dégressif</span>
+                        <span className="line-through">{formatCurrency(item.prixBase)}</span>{" "}
+                        <span className="font-medium text-foreground">{formatCurrency(item.prixUnitaire)}</span> / u
+                      </>
+                    ) : (
+                      <>{formatCurrency(item.prixUnitaire)} / unité</>
+                    )}
+                    {item.tauxTVA > 0 && ` · TVA ${item.tauxTVA}%`}
+                  </p>
                 </div>
                 <button
                   onClick={() => removeItem(cartKey(item))}
@@ -499,23 +457,6 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-
-              {/* Bandeau prix de gros disponible */}
-              {item.prixGros && item.qtePrixGros && item.quantite >= item.qtePrixGros && !item.prixGrosApplique && (
-                <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs">
-                  <span className="text-amber-700 font-medium flex-1">Prix de gros dispo : {formatCurrency(item.prixGros)}/u</span>
-                  <button onClick={() => confirmerPrixGros(cartKey(item))}
-                    className="px-2 py-0.5 rounded bg-amber-500 text-white font-bold hover:bg-amber-600 transition-colors">Appliquer</button>
-                  <button onClick={() => refuserPrixGros(cartKey(item))}
-                    className="px-2 py-0.5 rounded border border-amber-300 text-amber-600 hover:bg-amber-100 transition-colors">Non</button>
-                </div>
-              )}
-              {item.prixGrosApplique && (
-                <div className="mt-1 flex items-center justify-between text-xs text-emerald-600">
-                  <span className="font-medium inline-flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Prix de gros appliqué</span>
-                  <button onClick={() => refuserPrixGros(cartKey(item))} className="underline hover:no-underline">Annuler</button>
-                </div>
-              )}
 
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1">

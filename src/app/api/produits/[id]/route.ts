@@ -138,6 +138,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }
     }
 
+    // 3. Synchroniser les paliers de prix si fournis
+    if (data.paliers !== undefined) {
+      await tx.palierPrix.deleteMany({ where: { produitId: id } });
+      if ((data.paliers ?? []).length > 0) {
+        await tx.palierPrix.createMany({
+          data: (data.paliers ?? []).map((pal) => ({
+            produitId:    id,
+            quantiteMin:  pal.quantiteMin,
+            prixUnitaire: pal.prixUnitaire,
+          })),
+        });
+      }
+    }
+
     return p;
   });
 

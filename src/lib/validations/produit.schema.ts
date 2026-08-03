@@ -7,6 +7,11 @@ const varianteSchema = z.object({
   stockActuel: z.number().int().min(0).default(0),
 });
 
+const palierSchema = z.object({
+  quantiteMin:  z.number().int().positive("Quantité minimum invalide"),
+  prixUnitaire: z.number().positive("Prix invalide"),
+});
+
 export const createProduitSchema = z.object({
   nom:             z.string().min(1, "Nom requis").max(200),
   description:     z.string().max(2000).optional(),
@@ -24,6 +29,7 @@ export const createProduitSchema = z.object({
   poids:           z.string().max(20).optional().nullable(),
   dateAcquisition: z.string().optional().nullable(),
   variantes:       z.array(varianteSchema).optional().default([]),
+  paliers:         z.array(palierSchema).optional().default([]),
 });
 
 export const updateProduitSchema = createProduitSchema.partial();

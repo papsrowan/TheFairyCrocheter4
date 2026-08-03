@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/produits/[id]/lots/export?format=csv|pdf
-// Exporte les lots (arrivages) d'un produit en Excel (CSV) ou PDF
+// GET /api/produits/[id]/arrivages/export?format=csv|pdf
+// Exporte les arrivages (apports de stock datés) d'un produit en Excel (CSV) ou PDF
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
@@ -30,20 +30,21 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const produit = await prisma.produit.findUnique({
     where: { id },
-    include: {
-      lots: { orderBy: { dateEntree: "desc" }, include: { variante: { select: { couleur: true } } } },
-    },
+    include: { arrivages: { orderBy: { dateEntree: "desc" }, include: { lignes: true } } },
   });
   if (!produit) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
 
-  const rows = produit.lots.map((l) => ({
-    reference: l.reference,
-    date: new Date(l.dateEntree).toLocaleDateString("fr-FR"),
-    couleur: l.variante?.couleur ?? "—",
-    quantite: l.quantite,
-    prixAchat: l.prixAchat != null ? String(l.prixAchat) : "",
-  }));
-  const totalQte = produit.lots.reduce((s, l) => s + l.quantite, 0);
+  // Aplatir : une ligne = (arrivage, couleur, quantité)
+  const rows = produit.arrivages.flatMap((a) =>
+    a.lignes.map((l) => ({
+      reference: a.reference,
+      date: new Date(a.dateEntree).toLocaleDateString("fr-FR"),
+      couleur: l.couleur,
+      quantite: l.quantite,
+      prixAchat: l.prixAchat != null ? String(l.prixAchat) : "",
+    }))
+  );
+  const totalQte = rows.reduce((s, r) => s + r.quantite, 0);
   const safeName = produit.nom.replace(/[^a-zA-Z0-9-_]/g, "_");
 
   // ── PDF ──────────────────────────────────────────────────────────────────
@@ -58,8 +59,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       total: { flexDirection: "row", marginTop: 10, fontFamily: "Helvetica-Bold" },
     });
     const el = h(Document, {}, h(Page, { size: "A4", style: styles.page },
-      h(Text, { style: styles.title }, `Lots de stock — ${produit.nom}`),
-      h(Text, { style: styles.sub }, `Édité le ${new Date().toLocaleDateString("fr-FR")} · ${produit.lots.length} lot(s)`),
+      h(Text, { style: styles.title }, `Arrivages — ${produit.nom}`),
+      h(Text, { style: styles.sub }, `Édité le ${new Date().toLocaleDateString("fr-FR")} · ${produit.arrivages.length} arrivage(s)`),
       h(View, { style: styles.head },
         h(Text, { style: styles.cRef }, "Référence"),
         h(Text, { style: styles.cDate }, "Date"),
@@ -67,12 +68,12 @@ export async function GET(req: NextRequest, { params }: Params) {
         h(Text, { style: styles.cQte }, "Quantité"),
         h(Text, { style: styles.cPrix }, "Prix achat"),
       ),
-      ...produit.lots.map((l) => h(View, { style: styles.row, key: l.id },
-        h(Text, { style: styles.cRef }, l.reference),
-        h(Text, { style: styles.cDate }, new Date(l.dateEntree).toLocaleDateString("fr-FR")),
-        h(Text, { style: styles.cCol }, l.variante?.couleur ?? "—"),
-        h(Text, { style: styles.cQte }, String(l.quantite)),
-        h(Text, { style: styles.cPrix }, l.prixAchat != null ? `${l.prixAchat} XAF` : "—"),
+      ...rows.map((r, i) => h(View, { style: styles.row, key: i },
+        h(Text, { style: styles.cRef }, r.reference),
+        h(Text, { style: styles.cDate }, r.date),
+        h(Text, { style: styles.cCol }, r.couleur),
+        h(Text, { style: styles.cQte }, String(r.quantite)),
+        h(Text, { style: styles.cPrix }, r.prixAchat ? `${r.prixAchat} XAF` : "—"),
       )),
       h(View, { style: styles.total },
         h(Text, { style: styles.cRef }, "TOTAL"),
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="lots-${safeName}.pdf"`,
+        "Content-Disposition": `inline; filename="arrivages-${safeName}.pdf"`,
         "Cache-Control": "no-store",
       },
     });
@@ -96,17 +97,16 @@ export async function GET(req: NextRequest, { params }: Params) {
   // ── CSV (Excel) ────────────────────────────────────────────────────────────
   const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines = [
-    "Référence;Date d'arrivée;Couleur;Quantité;Prix d'achat (XAF)",
+    "Référence;Date;Couleur;Quantité;Prix d'achat (XAF)",
     ...rows.map((r) => [esc(r.reference), esc(r.date), esc(r.couleur), r.quantite, r.prixAchat].join(";")),
     `TOTAL;;;${totalQte};`,
   ];
-  // BOM UTF-8 pour qu'Excel lise correctement les accents
   const csv = "﻿" + lines.join("\r\n");
 
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="lots-${safeName}.csv"`,
+      "Content-Disposition": `attachment; filename="arrivages-${safeName}.csv"`,
       "Cache-Control": "no-store",
     },
   });

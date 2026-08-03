@@ -11,6 +11,7 @@ import { hasPermission } from "@/lib/security/rbac";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
 import { NotesTicker } from "@/components/dashboard/NotesTicker";
+import { CA12MoisChart } from "@/components/finances/CA12MoisChart";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
   const debutHier = new Date(debutJour.getTime() - 86_400_000);
   const finHier   = new Date(debutJour.getTime() - 1);
   const il7Jours  = new Date(debutJour.getTime() - 6 * 86_400_000);
+  const debut12Mois = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
   const canFinances = hasPermission(role, "dashboard:finances");
   const isManager = role === "MANAGER";
@@ -41,6 +43,7 @@ export default async function DashboardPage() {
     clientsActifs,
     ventesRecentes,
     caParJourRaw,
+    caParMoisRaw,
     notesRaw,
   ] = await Promise.all([
     prisma.vente.aggregate({
@@ -88,6 +91,14 @@ export default async function DashboardPage() {
       GROUP BY DATE_TRUNC('day', created_at)
       ORDER BY jour ASC
     `,
+    // CA par mois sur les 12 derniers mois
+    prisma.$queryRaw<Array<{ mois: Date; total: number }>>`
+      SELECT DATE_TRUNC('month', created_at) AS mois, SUM(total)::float AS total
+      FROM ventes
+      WHERE created_at >= ${debut12Mois} AND statut = 'COMPLETEE'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY mois ASC
+    `,
     // Notes : propres à l'utilisateur + notes envoyées par les managers (prix spécial)
     prisma.note.findMany({
       where: {
@@ -119,6 +130,14 @@ export default async function DashboardPage() {
     );
     caParJour.push({ date: dateStr, total: row?.total ?? 0, nb: row ? Number(row.nb) : 0 });
   }
+
+  // Série CA sur 12 mois (mois sans vente = 0)
+  const caParMois = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const row = caParMoisRaw.find((r) => new Date(r.mois).toISOString().slice(0, 7) === key);
+    return { mois: key, ca: row?.total ?? 0 };
+  });
 
   const caAujourdhui = ventesAujourdhui._sum.total ?? 0;
   const caHier       = ventesHier._sum.total ?? 0;
@@ -174,6 +193,13 @@ export default async function DashboardPage() {
           return d.map(x => ({ id: x.venteId, type: x.type, statut: x.statut, venteNumero: x.vente.numero, createdAt: x.createdAt.toISOString() }));
         })() : []}
       />
+
+      {/* ── Diagramme CA sur 12 mois ── */}
+      {canFinances && (
+        <div className="pt-2">
+          <CA12MoisChart data={caParMois} />
+        </div>
+      )}
     </div>
   );
 }

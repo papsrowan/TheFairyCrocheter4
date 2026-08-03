@@ -50,14 +50,13 @@ export async function GET(req: NextRequest) {
       nom: true,
       codeBarres: true,
       prixVente: true,
-      prixGros: true,
-      qtePrixGros: true,
       tauxTVA: true,
       stockActuel: true,
       stockMinimum: true,
       imageUrl: true,
       categorie:  { select: { nom: true } },
       variantes:  { select: { id: true, couleur: true, description: true, stockActuel: true }, orderBy: { couleur: "asc" } },
+      paliers:    { select: { quantiteMin: true, prixUnitaire: true }, orderBy: { quantiteMin: "asc" } },
     },
     orderBy: [
       { stockActuel: "desc" }, // Produits en stock d'abord

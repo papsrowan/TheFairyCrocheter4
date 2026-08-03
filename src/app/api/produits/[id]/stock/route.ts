@@ -14,7 +14,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { Role } from "@prisma/client";
 
-import { genLotRef } from "@/lib/utils/lot";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -83,13 +82,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       }}),
     ]);
 
-    // Nouvelle arrivée → créer un lot daté distinguable
-    if (type === "ENTREE") {
-      await prisma.lotStock.create({ data: {
-        produitId: id, varianteId, reference: genLotRef(), quantite,
-        prixAchat: produit.prixAchat ?? null, motif: motif ?? null, userId: session.user.id,
-      }});
-    }
+    // NB : les arrivages (apports de stock multi-couleurs datés) se créent via
+    // « Nouvel arrivage » sur la fiche produit. Cet ajustement reste une simple
+    // correction de stock (perte, inventaire, entrée ponctuelle).
 
     emitSSE("stock.updated", { produitId: id, stockActuel: pApres, type });
     await audit({ userId: session.user.id, action: AUDIT_ACTIONS.STOCK_ADJUSTED, entityId: id, entityType: "produit",
@@ -147,14 +142,6 @@ export async function POST(req: NextRequest, { params }: Params) {
       data:  { stockActuel: stockApres },
     }),
   ]);
-
-  // Nouvelle arrivée → créer un lot daté distinguable
-  if (type === "ENTREE") {
-    await prisma.lotStock.create({ data: {
-      produitId: id, reference: genLotRef(), quantite,
-      prixAchat: produit.prixAchat ?? null, motif: motif ?? null, userId: session.user.id,
-    }});
-  }
 
   // SSE — alerte si stock passe sous le minimum
   if (stockApres < produit.stockMinimum) {

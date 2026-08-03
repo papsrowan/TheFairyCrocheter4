@@ -253,29 +253,59 @@ model Produit {
   mouvementsStock MouvementStock[]
   lignesVente     LigneVente[]
   lignesRetour    LigneRetour[]
-  lots            LotStock[]
+  arrivages       Arrivage[]
+  paliers         PalierPrix[]
 
   @@map("produits")
 }
 
-// Lot / arrivage de stock : chaque entrée datée est distinguable des suivantes
-model LotStock {
+// Paliers de prix dégressifs : le prix unitaire baisse selon la quantité commandée.
+// Ex: {1 → 1000}, {10 → 850}, {100 → 650}. Le palier au quantiteMin le plus élevé
+// ≤ quantité commandée s'applique (sinon prixVente).
+model PalierPrix {
+  id           String  @id @default(cuid())
+  produitId    String  @map("produit_id")
+  quantiteMin  Int     @map("quantite_min")
+  prixUnitaire Float   @map("prix_unitaire")
+
+  produit      Produit @relation(fields: [produitId], references: [id], onDelete: Cascade)
+
+  @@index([produitId])
+  @@map("paliers_prix")
+}
+
+// Arrivage / lot daté : un apport de stock regroupant plusieurs couleurs+quantités.
+// Ex: Arrivage du 03/07 = { Rouge ×10, Bleu ×5 }.
+model Arrivage {
   id          String   @id @default(cuid())
   produitId   String   @map("produit_id")
-  varianteId  String?  @map("variante_id")
   reference   String   @unique
-  quantite    Int
-  prixAchat   Float?   @map("prix_achat")
   motif       String?
   dateEntree  DateTime @default(now()) @map("date_entree")
   userId      String?  @map("user_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  produit     Produit          @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  variante    VarianteProduit? @relation(fields: [varianteId], references: [id], onDelete: SetNull)
+  produit     Produit         @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  lignes      LigneArrivage[]
 
   @@index([produitId])
-  @@map("lots_stock")
+  @@map("arrivages")
+}
+
+// Une ligne d'arrivage = une couleur + sa quantité reçue dans cet arrivage.
+model LigneArrivage {
+  id          String   @id @default(cuid())
+  arrivageId  String   @map("arrivage_id")
+  varianteId  String?  @map("variante_id")
+  couleur     String
+  quantite    Int
+  prixAchat   Float?   @map("prix_achat")
+
+  arrivage    Arrivage         @relation(fields: [arrivageId], references: [id], onDelete: Cascade)
+  variante    VarianteProduit? @relation(fields: [varianteId], references: [id], onDelete: SetNull)
+
+  @@index([arrivageId])
+  @@map("lignes_arrivage")
 }
 
 model VarianteProduit {
@@ -287,11 +317,11 @@ model VarianteProduit {
   stockActuel   Int     @default(0) @map("stock_actuel")
   stockMinimum  Int     @default(0) @map("stock_minimum")
 
-  produit       Produit        @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  lignesVente   LigneVente[]
-  lignesRetour  LigneRetour[]
-  mouvements    MouvementStock[]
-  lots          LotStock[]
+  produit        Produit        @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  lignesVente    LigneVente[]
+  lignesRetour   LigneRetour[]
+  mouvements     MouvementStock[]
+  lignesArrivage LigneArrivage[]
 
   @@map("variantes_produits")
 }

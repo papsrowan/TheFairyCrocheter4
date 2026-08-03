@@ -71,6 +71,12 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
     (initialData as { variantes?: Array<{ id: string; couleur: string; description?: string; stockActuel: number }> })?.variantes ?? []
   );
   const [newVarianteCouleur, setNewVarianteCouleur] = useState("");
+
+  // Paliers de prix dégressifs (quantité min → prix unitaire)
+  const [paliers, setPaliers] = useState<Array<{ quantiteMin: string; prixUnitaire: string }>>(
+    (initialData as { paliers?: Array<{ quantiteMin: number; prixUnitaire: number }> })?.paliers
+      ?.map((p) => ({ quantiteMin: String(p.quantiteMin), prixUnitaire: String(p.prixUnitaire) })) ?? []
+  );
   const [newCatNom,   setNewCatNom]   = useState("");
   const [localCats,   setLocalCats]   = useState(categories);
 
@@ -143,8 +149,8 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
       categorieId:     form.categorieId || null,
       poids:           form.poids || null,
       prixVente:       parseCommaFloat(form.prixVente),
-      prixGros:        form.prixGros ? parseCommaFloat(form.prixGros) : null,
-      qtePrixGros:     form.qtePrixGros ? parseInt(form.qtePrixGros) : null,
+      prixGros:        null,   // remplacé par les paliers de prix
+      qtePrixGros:     null,
       prixAchat:       parseCommaFloat(form.prixAchat) || 0,
       tauxTVA:         0,
       stockActuel:     stockFinal,
@@ -153,6 +159,9 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
       couleur:         null,
       dateAcquisition: form.dateAcquisition || null,
       variantes:       variantes.filter(v => v.couleur.trim()),
+      paliers:         paliers
+        .map((p) => ({ quantiteMin: parseInt(p.quantiteMin) || 0, prixUnitaire: parseCommaFloat(p.prixUnitaire) || 0 }))
+        .filter((p) => p.quantiteMin > 0 && p.prixUnitaire > 0),
     };
 
     try {
@@ -416,26 +425,44 @@ export default function ProduitForm({ categories, initialData, mode }: ProduitFo
               className="form-input" placeholder="0" />
           </div>
           <div>
-            <label className="form-label">Prix de Gros (XAF)</label>
-            <input type="text" inputMode="decimal"
-              value={form.prixGros} onChange={(e) => set("prixGros", e.target.value)}
-              className="form-input" placeholder="0" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="form-label">Qté min. Prix de Gros</label>
-            <input type="number" min="0" step="1"
-              value={form.qtePrixGros} onChange={(e) => set("qtePrixGros", e.target.value)}
-              className="form-input" placeholder="Ex: 10" />
-          </div>
-          <div>
             <label className="form-label">Prix d&apos;achat (XAF)</label>
             <input type="text" inputMode="decimal"
               value={form.prixAchat} onChange={(e) => set("prixAchat", e.target.value)}
               className="form-input" placeholder="0" />
           </div>
+        </div>
+
+        {/* ── Paliers de prix dégressifs ── */}
+        <div>
+          <label className="form-label">Paliers de prix dégressifs (gros / super-gros)</label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Le prix baisse selon la quantité commandée. Ex : dès 10 → 850, dès 100 → 650.
+            En dessous du 1<sup>er</sup> palier, c&apos;est le prix détail qui s&apos;applique.
+          </p>
+          <div className="space-y-2">
+            {paliers.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground shrink-0">Dès</span>
+                <input type="number" min={1} value={p.quantiteMin}
+                  onChange={(e) => setPaliers((ps) => ps.map((x, j) => j === i ? { ...x, quantiteMin: e.target.value } : x))}
+                  placeholder="Qté" className="w-20 form-input" />
+                <span className="text-sm text-muted-foreground shrink-0">u. →</span>
+                <input type="text" inputMode="decimal" value={p.prixUnitaire}
+                  onChange={(e) => setPaliers((ps) => ps.map((x, j) => j === i ? { ...x, prixUnitaire: e.target.value } : x))}
+                  placeholder="Prix / unité" className="flex-1 form-input" />
+                <span className="text-sm text-muted-foreground shrink-0">XAF</span>
+                <button type="button" onClick={() => setPaliers((ps) => ps.filter((_, j) => j !== i))}
+                  className="p-1 rounded hover:bg-destructive/10 text-destructive shrink-0">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button"
+            onClick={() => setPaliers((ps) => [...ps, { quantiteMin: "", prixUnitaire: "" }])}
+            className="mt-2 flex items-center gap-1.5 text-sm text-primary font-medium hover:underline">
+            <Plus className="h-4 w-4" /> Ajouter un palier
+          </button>
         </div>
 
         {/* Marge calculée */}
