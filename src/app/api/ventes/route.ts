@@ -164,13 +164,13 @@ export async function POST(req: NextRequest) {
 
         produitsMap.set(ligne.produitId, produit);
 
-        const ligneHT = (ligne.prixUnitaire * ligne.quantite * (1 - ligne.remise / 100)) / (1 + ligne.tauxTVA / 100);
-        const ligneTTC = ligneHT * (1 + ligne.tauxTVA / 100);
+        const ligneTTC = Math.max(0, ligne.prixUnitaire * ligne.quantite - ligne.remise);
+        const ligneHT = ligneTTC / (1 + ligne.tauxTVA / 100);
         sousTotal += Math.round(ligneTTC * 100) / 100;
-        montantTVA += Math.round(ligneHT * (ligne.tauxTVA / 100) * 100) / 100;
+        montantTVA += Math.round((ligneTTC - ligneHT) * 100) / 100;
       }
 
-      const totalCalcule = Math.round(sousTotal * (1 - venteData.remiseGlobale / 100) * 100) / 100;
+      const totalCalcule = Math.max(0, sousTotal - venteData.remiseGlobale);
       const total = venteData.prixSpecial ?? totalCalcule;
 
       // 2. Génération du numéro de vente — ordonner par numéro (séquence) et NON par
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
               prixUnitaire: l.prixUnitaire,
               remise:     l.remise,
               tauxTVA:    l.tauxTVA,
-              total: Math.round(l.prixUnitaire * l.quantite * (1 - l.remise / 100) * 100) / 100,
+              total: Math.max(0, l.prixUnitaire * l.quantite - l.remise),
             })),
           },
         },
@@ -318,10 +318,10 @@ export async function POST(req: NextRequest) {
     if (venteData.prixSpecial && session.user.role === "MANAGER") {
       const totalCalculeRef = Math.round(
         venteData.lignes.reduce((s, l) => {
-          const ht = (l.prixUnitaire * l.quantite * (1 - l.remise / 100)) / (1 + l.tauxTVA / 100);
-          return s + Math.round(ht * (1 + l.tauxTVA / 100) * 100) / 100;
-        }, 0) * (1 - venteData.remiseGlobale / 100) * 100
-      ) / 100;
+          const ttc = Math.max(0, l.prixUnitaire * l.quantite - l.remise);
+          return s + ttc;
+        }, 0) - venteData.remiseGlobale
+      );
 
       await prisma.note.create({
         data: {

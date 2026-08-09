@@ -10,7 +10,7 @@ export const ligneVenteSchema = z.object({
   varianteId: z.string().cuid().optional().nullable(),
   quantite:   z.number().int().positive("Quantité doit être positive"),
   prixUnitaire: z.number().positive("Prix invalide"),
-  remise:     z.number().min(0).max(100, "Remise entre 0 et 100%").default(0),
+  remise:     z.number().min(0, "La remise ne peut pas être négative").default(0),
   tauxTVA:    z.number().min(0).max(100, "Taux TVA invalide"),
 });
 
@@ -19,7 +19,7 @@ export const createVenteSchema = z.object({
   lignes: z
     .array(ligneVenteSchema)
     .min(1, "La vente doit contenir au moins un article"),
-  remiseGlobale: z.number().min(0).max(100).default(0),
+  remiseGlobale: z.number().min(0, "La remise ne peut pas être négative").default(0),
   modePaiement: z.enum(["ESPECES", "CARTE", "VIREMENT", "CHEQUE", "MIXTE", "CREDIT"]),
   notes: z.string().max(500).optional(),
   offlineId: z.string().optional(),

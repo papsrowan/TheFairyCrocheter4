@@ -117,7 +117,7 @@ function ApercuModal({
                     <div className="flex justify-between text-gray-500">
                       <span>
                         {item.quantite} × {fmtXAF(item.prixUnitaire)}
-                        {item.remise > 0 && <span className="text-emerald-600"> -{item.remise}%</span>}
+                        {item.remise > 0 && <span className="text-emerald-600"> -{fmtXAF(item.remise)}</span>}
                       </span>
                       <span className="font-bold text-gray-800 dark:text-gray-100">{fmtXAF(item.total)}</span>
                     </div>
@@ -133,8 +133,8 @@ function ApercuModal({
               )}
               {remiseGlobale > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Remise {remiseGlobale}%</span>
-                  <span>-{fmtXAF(sousTotal * remiseGlobale / 100)}</span>
+                  <span>Remise globale</span>
+                  <span>-{fmtXAF(remiseGlobale)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-base border-t border-gray-300 pt-2 mt-1">
@@ -207,8 +207,8 @@ function ApercuModal({
                 </div>
                 {remiseGlobale > 0 && (
                   <div className="flex justify-between text-emerald-600">
-                    <span>Remise ({remiseGlobale}%)</span>
-                    <span>-{fmtXAF(sousTotal * remiseGlobale / 100)}</span>
+                    <span>Remise</span>
+                    <span>-{fmtXAF(remiseGlobale)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-base border-t border-blue-700 pt-2 text-blue-700">
@@ -256,7 +256,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
   const {
     items, clientId, clientNom, remiseGlobale, modePaiement,
     sousTotal, total, montantTVA,
-    updateQuantite, updateRemise, removeItem,
+    updateQuantite, updateRemise, removeItem, repondrePalier,
     setRemiseGlobale, setModePaiement, clearClient, clearCart,
   } = useCartStore();
 
@@ -425,7 +425,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
 
         {/* Articles */}
         <div className="flex-1 overflow-y-auto divide-y divide-border">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <div key={cartKey(item)} className="px-4 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -504,13 +504,12 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                     <input
                       type="number"
                       min={0}
-                      max={100}
                       defaultValue={item.remise}
                       autoFocus
-                      className="w-14 h-6 rounded border text-xs text-center px-1"
+                      className="w-16 h-6 rounded border text-xs text-center px-1"
                       onBlur={(e) => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val >= 0 && val <= 100) {
+                        if (!isNaN(val) && val >= 0) {
                           updateRemise(cartKey(item), val);
                         }
                         setEditingRemise(null);
@@ -525,7 +524,7 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                       onClick={() => setEditingRemise(item.produitId)}
                       className="text-xs text-muted-foreground hover:text-primary transition-colors"
                     >
-                      {item.remise > 0 ? `${item.remise}%` : "Remise"}
+                      {item.remise > 0 ? `-${formatCurrency(item.remise)}` : "Remise"}
                     </button>
                   )}
                 </div>
@@ -534,6 +533,29 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                   {formatCurrency(item.total)}
                 </p>
               </div>
+
+              {/* Invite pour appliquer le palier */}
+              {item.palierDisponible && items.findIndex(i => i.produitId === item.produitId) === index && (
+                <div className="mt-3 p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm flex items-center justify-between">
+                  <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+                    Appliquer le prix de {formatCurrency(item.prixPossibleAvecPalier || 0)}/u ?
+                  </span>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => repondrePalier(item.produitId, true)}
+                      className="px-3 py-1 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 transition"
+                    >
+                      Oui
+                    </button>
+                    <button 
+                      onClick={() => repondrePalier(item.produitId, false)}
+                      className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                    >
+                      Non
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -548,12 +570,12 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
                 <Percent className="h-3 w-3" /> Remise
               </span>
               <div className="flex items-center gap-1">
-                <input type="number" min={0} max={100}
+                <input type="number" min={0}
                   value={globalRemiseInput}
                   onChange={(e) => setGlobalRemiseInput(e.target.value)}
-                  onBlur={() => { const v = parseFloat(globalRemiseInput); if (!isNaN(v) && v >= 0 && v <= 100) setRemiseGlobale(v); }}
-                  className="w-14 h-6 rounded border text-center text-xs px-1" />
-                <span className="text-muted-foreground text-xs">%</span>
+                  onBlur={() => { const v = parseFloat(globalRemiseInput); if (!isNaN(v) && v >= 0) setRemiseGlobale(v); }}
+                  className="w-20 h-6 rounded border text-center text-xs px-1" />
+                <span className="text-muted-foreground text-xs">XAF</span>
               </div>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -566,8 +588,8 @@ export function CartSummary({ onVenteCreee, onAddItem: _onAddItem }: CartSummary
             )}
             {remiseGlobale > 0 && (
               <div className="flex justify-between text-xs text-green-600">
-                <span>Remise ({remiseGlobale}%)</span>
-                <span>- {formatCurrency(sousTotal() * remiseGlobale / 100)}</span>
+                <span>Remise</span>
+                <span>- {formatCurrency(remiseGlobale)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-base border-t pt-1">

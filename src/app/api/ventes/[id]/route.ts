@@ -85,19 +85,20 @@ export async function PUT(
     const result = await prisma.$transaction(async (tx) => {
       // 1. Calculer nouveaux totaux
       const sousTotal = body.lignes.reduce((sum, l) => {
-        const apresRemiseLigne = l.prixUnitaire * l.quantite * (1 - l.remise / 100);
+        const apresRemiseLigne = Math.max(0, l.prixUnitaire * l.quantite - l.remise);
         return sum + apresRemiseLigne;
       }, 0);
       const montantTVA = body.lignes.reduce((sum, l) => {
-        const ht = l.prixUnitaire / (1 + l.tauxTVA / 100) * l.quantite * (1 - l.remise / 100);
-        return sum + (l.prixUnitaire * l.quantite * (1 - l.remise / 100) - ht);
+        const ttc = Math.max(0, l.prixUnitaire * l.quantite - l.remise);
+        const ht = ttc / (1 + l.tauxTVA / 100);
+        return sum + (ttc - ht);
       }, 0);
-      const total = Math.round(sousTotal * (1 - body.remiseGlobale / 100) * 100) / 100;
+      const total = Math.max(0, sousTotal - body.remiseGlobale);
 
       // 2. Remplacer les lignes (sans toucher au stock ici)
       await tx.ligneVente.deleteMany({ where: { venteId: venteActuelle.id } });
       for (const l of body.lignes) {
-        const totalLigne = Math.round(l.prixUnitaire * l.quantite * (1 - l.remise / 100) * (1 - body.remiseGlobale / 100) * 100) / 100;
+        const totalLigne = Math.max(0, l.prixUnitaire * l.quantite - l.remise);
         await tx.ligneVente.create({
           data: { venteId: venteActuelle.id, produitId: l.produitId, varianteId: l.varianteId ?? null, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise, tauxTVA: l.tauxTVA, total: totalLigne },
         });
