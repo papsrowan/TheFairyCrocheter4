@@ -37,11 +37,11 @@ const MODES = [
 ] as const;
 
 function calcLigne(l: LigneEdit) {
-  return Math.round(l.prixUnitaire * l.quantite * (1 - l.remise / 100));
+  return Math.max(0, l.prixUnitaire * l.quantite - l.remise);
 }
 function calcTotal(lignes: LigneEdit[], remiseGlobale: number) {
   const sous = lignes.reduce((s, l) => s + calcLigne(l), 0);
-  return Math.round(sous * (1 - remiseGlobale / 100));
+  return Math.max(0, sous - remiseGlobale);
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -103,8 +103,10 @@ export function VenteEditModal({ vente, onClose }: Props) {
 
   const addProduit = useCallback((p: Produit) => {
     setLignes(prev => {
-      const ex = prev.find(l => l.produitId === p.id);
-      if (ex) return prev.map(l => l.produitId === p.id ? { ...l, quantite: l.quantite + 1 } : l);
+      // Si on a déjà une ligne pour ce produit SANS variante sélectionnée, on incrémente celle-ci
+      const exBlank = prev.find(l => l.produitId === p.id && !l.varianteId);
+      if (exBlank) return prev.map(l => l._key === exBlank._key ? { ...l, quantite: l.quantite + 1 } : l);
+      // Sinon on ajoute une nouvelle ligne
       return [...prev, { _key: String(keyRef.current++), produitId: p.id, varianteId: null, couleur: null, variantes: p.variantes ?? [], nom: p.nom, prixUnitaire: p.prixVente, tauxTVA: p.tauxTVA, quantite: 1, remise: 0 }];
     });
     setProdSearch(""); setShowProdDD(false);
@@ -235,10 +237,11 @@ export function VenteEditModal({ vente, onClose }: Props) {
                   </div>
                   {/* Remise ligne */}
                   <div className="flex items-center gap-1 shrink-0">
-                    <Percent className="h-3 w-3 text-muted-foreground" />
-                    <input type="number" min={0} max={100} value={l.remise}
+                    <span className="text-muted-foreground text-xs font-medium">Remise</span>
+                    <input type="number" min={0} value={l.remise}
                       onChange={e => updateLigne(l._key, "remise", parseFloat(e.target.value) || 0)}
-                      className="w-12 h-6 rounded border text-xs text-center px-1" />
+                      className="w-16 h-6 rounded border text-xs text-center px-1" />
+                    <span className="text-muted-foreground text-xs">XAF</span>
                   </div>
                   <span className="font-bold text-primary shrink-0 w-20 text-right">{formatCurrency(calcLigne(l))}</span>
                   <button onClick={() => removeLigne(l._key)} className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -287,10 +290,10 @@ export function VenteEditModal({ vente, onClose }: Props) {
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">Remise globale</label>
               <div className="flex items-center gap-2">
-                <input type="number" min={0} max={100} value={remiseGlobale}
+                <input type="number" min={0} value={remiseGlobale}
                   onChange={e => setRemiseGlobale(parseFloat(e.target.value) || 0)}
                   className="flex-1 h-9 rounded-lg border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                <span className="text-muted-foreground text-sm">%</span>
+                <span className="text-muted-foreground text-sm">XAF</span>
               </div>
             </div>
           </div>

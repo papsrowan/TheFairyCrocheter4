@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { create } from "zustand";
-import { prixUnitairePourQuantite, type Palier } from "@/lib/utils/prix";
+import { prixUnitairePourQuantite, type Palier, calculerTotalPaliersFractionnes } from "@/lib/utils/prix";
 
 export interface CartItem {
   produitId: string;
@@ -81,11 +81,12 @@ function recalculateCart(
   const newItems = items.map(item => {
     const totalQte = qteParProduit.get(item.produitId) || 0;
     
-    // Le prix théorique si on applique le palier avec la quantité totale
-    const prixAvecPalier = prixUnitairePourQuantite(item.prixBase, item.paliers, totalQte);
+    // Le prix théorique si on applique le palier fractionné avec la quantité totale
+    const totalTheorique = calculerTotalPaliersFractionnes(item.prixBase, item.paliers, totalQte);
+    const prixMoyenAvecPalier = totalQte > 0 ? totalTheorique / totalQte : item.prixBase;
     
     // Le palier est-il atteint ?
-    const palierAtteint = prixAvecPalier < item.prixBase;
+    const palierAtteint = totalTheorique < (item.prixBase * totalQte);
     let applyPalier = false;
     let palierDisponible = false;
 
@@ -103,16 +104,26 @@ function recalculateCart(
       }
     }
 
-    const prixUnitaire = applyPalier ? prixAvecPalier : item.prixBase;
-    const totalBrut = prixUnitaire * item.quantite;
+    let totalBrut;
+    let prixUnitaireAffiche;
+
+    if (applyPalier) {
+        // Proratisation du total théorique pour éviter les erreurs d'arrondi
+        totalBrut = Math.round((item.quantite / totalQte) * totalTheorique);
+        prixUnitaireAffiche = totalBrut / item.quantite;
+    } else {
+        totalBrut = item.prixBase * item.quantite;
+        prixUnitaireAffiche = item.prixBase;
+    }
+
     const total = Math.max(0, totalBrut - item.remise);
 
     return {
       ...item,
-      prixUnitaire,
+      prixUnitaire: prixUnitaireAffiche,
       total,
       palierDisponible,
-      prixPossibleAvecPalier: prixAvecPalier
+      prixPossibleAvecPalier: prixMoyenAvecPalier
     };
   });
 
