@@ -30,7 +30,7 @@ export default async function FinancesPage() {
   const [
     statsMoisActuel, statsMoisPrecedent, statsAnnee,
     ventesParJour, topProduits, nbClients, nbProduitsActifs,
-    facturesEnAttente,
+    facturesEnAttente, ecritures7j, cogs7j,
   ] = await Promise.all([
     // Stats mois actuel
     prisma.ecritureFinanciere.groupBy({
@@ -79,6 +79,22 @@ export default async function FinancesPage() {
       include: { client: { select: { nom: true, prenom: true } } },
       orderBy: { dateEcheance: "asc" },
     }),
+    // Ecritures financieres 7 derniers jours
+    prisma.$queryRaw<Array<{ jour: Date; type: string; total: number }>>`
+      SELECT DATE(date) AS jour, type::text AS type, SUM(montant)::float AS total
+      FROM ecritures_financieres
+      WHERE date >= ${debut7j}
+      GROUP BY 1, 2
+    `,
+    // COGS 7 derniers jours
+    prisma.$queryRaw<Array<{ jour: Date; cogs: number }>>`
+      SELECT DATE(v.created_at) AS jour, SUM(lv.quantite * p.prix_achat)::float AS cogs
+      FROM lignes_ventes lv
+      JOIN ventes v ON v.id = lv.vente_id
+      JOIN produits p ON p.id = lv.produit_id
+      WHERE v.statut = 'COMPLETEE' AND v.created_at >= ${debut7j}
+      GROUP BY 1
+    `,
   ]);
 
   // Résolution noms produits top
@@ -202,6 +218,30 @@ export default async function FinancesPage() {
     return { date, total: found ? Number(found.total) : 0, nb: found ? Number(found.nb) : 0 };
   });
   const maxTotal = Math.max(...joursData.map((j) => j.total), 1);
+
+  const joursHistTable = joursLabels.map((dateStr) => {
+    const foundVentes = ventesParJour.find((v) => new Date(v.jour).toISOString().slice(0, 10) === dateStr);
+    const recs = ecritures7j
+      .filter((e) => new Date(e.jour).toISOString().slice(0, 10) === dateStr && (e.type === "RECETTE_VENTE" || e.type === "REMBOURSEMENT"))
+      .reduce((s, e) => s + e.total, 0);
+    const depsSaisies = ecritures7j
+      .filter((e) => new Date(e.jour).toISOString().slice(0, 10) === dateStr && e.type === "DEPENSE")
+      .reduce((s, e) => s + e.total, 0);
+    const foundCogs = cogs7j.find((c) => new Date(c.jour).toISOString().slice(0, 10) === dateStr);
+    const cogsVal = foundCogs?.cogs ?? 0;
+
+    const caNet = recs || (foundVentes ? Number(foundVentes.total) : 0);
+    const depenses = depsSaisies + cogsVal;
+    const benefice = caNet - depenses;
+
+    return {
+      dateStr,
+      caNet,
+      depenses,
+      benefice,
+      nbVentes: foundVentes ? Number(foundVentes.nb) : 0,
+    };
+  }).reverse();
 
   const facturesEnRetard  = facturesEnAttente.filter((v) => v.dateEcheance && v.dateEcheance < now);
   const facturesARecevoir = facturesEnAttente.filter((v) => !v.dateEcheance || v.dateEcheance >= now);
@@ -349,6 +389,36 @@ export default async function FinancesPage() {
                 </div>
               );
             })}
+          </div>
+          {/* Tableau synthétique 7 jours */}
+          <div className="mt-4 border-t pt-3 overflow-x-auto">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Détail financier (7 jours)</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground border-b">
+                  <th className="text-left py-1.5 font-medium">Jour</th>
+                  <th className="text-right font-medium">Recettes</th>
+                  <th className="text-right font-medium">Dépenses</th>
+                  <th className="text-right font-medium">Bénéfice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {joursHistTable.map((h) => {
+                  const d = new Date(h.dateStr + "T12:00:00");
+                  const label = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(d);
+                  return (
+                    <tr key={h.dateStr} className="border-b border-border/30">
+                      <td className="py-1.5 font-medium capitalize">{label}</td>
+                      <td className="text-right tabular-nums text-green-600 font-medium">{formatCurrency(h.caNet)}</td>
+                      <td className="text-right tabular-nums text-red-500">{formatCurrency(h.depenses)}</td>
+                      <td className={cn("text-right tabular-nums font-bold", h.benefice >= 0 ? "text-primary" : "text-destructive")}>
+                        {formatCurrency(h.benefice)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 

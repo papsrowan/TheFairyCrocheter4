@@ -30,16 +30,22 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const produit = await prisma.produit.findUnique({
     where: { id },
-    include: { arrivages: { orderBy: { dateEntree: "desc" }, include: { lignes: true } } },
+    include: {
+      arrivages: {
+        orderBy: { dateEntree: "desc" },
+        include: { lignes: { include: { variante: true } } },
+      },
+    },
   });
   if (!produit) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
 
-  // Aplatir : une ligne = (arrivage, couleur, quantité)
+  // Aplatir : une ligne = (arrivage, couleur, description, quantité)
   const rows = produit.arrivages.flatMap((a) =>
     a.lignes.map((l) => ({
       reference: a.reference,
       date: new Date(a.dateEntree).toLocaleDateString("fr-FR"),
       couleur: l.couleur,
+      description: l.variante?.description ?? "",
       quantite: l.quantite,
       prixAchat: l.prixAchat != null ? String(l.prixAchat) : "",
     }))
@@ -55,7 +61,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       sub: { fontSize: 9, color: "#666", marginBottom: 16 },
       row: { flexDirection: "row", borderBottom: "1 solid #ddd", paddingVertical: 4 },
       head: { flexDirection: "row", borderBottom: "1.5 solid #333", paddingVertical: 4, fontFamily: "Helvetica-Bold" },
-      cRef: { width: "28%" }, cDate: { width: "20%" }, cCol: { width: "22%" }, cQte: { width: "15%", textAlign: "right" }, cPrix: { width: "15%", textAlign: "right" },
+      cRef: { width: "22%" }, cDate: { width: "16%" }, cCol: { width: "18%" }, cDesc: { width: "24%" }, cQte: { width: "10%", textAlign: "right" }, cPrix: { width: "10%", textAlign: "right" },
       total: { flexDirection: "row", marginTop: 10, fontFamily: "Helvetica-Bold" },
     });
     const el = h(Document, {}, h(Page, { size: "A4", style: styles.page },
@@ -65,6 +71,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         h(Text, { style: styles.cRef }, "Référence"),
         h(Text, { style: styles.cDate }, "Date"),
         h(Text, { style: styles.cCol }, "Couleur"),
+        h(Text, { style: styles.cDesc }, "Description"),
         h(Text, { style: styles.cQte }, "Quantité"),
         h(Text, { style: styles.cPrix }, "Prix achat"),
       ),
@@ -72,6 +79,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         h(Text, { style: styles.cRef }, r.reference),
         h(Text, { style: styles.cDate }, r.date),
         h(Text, { style: styles.cCol }, r.couleur),
+        h(Text, { style: styles.cDesc }, r.description),
         h(Text, { style: styles.cQte }, String(r.quantite)),
         h(Text, { style: styles.cPrix }, r.prixAchat ? `${r.prixAchat} XAF` : "—"),
       )),
@@ -79,6 +87,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         h(Text, { style: styles.cRef }, "TOTAL"),
         h(Text, { style: styles.cDate }, ""),
         h(Text, { style: styles.cCol }, ""),
+        h(Text, { style: styles.cDesc }, ""),
         h(Text, { style: styles.cQte }, String(totalQte)),
         h(Text, { style: styles.cPrix }, ""),
       ),
@@ -97,9 +106,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   // ── CSV (Excel) ────────────────────────────────────────────────────────────
   const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines = [
-    "Référence;Date;Couleur;Quantité;Prix d'achat (XAF)",
-    ...rows.map((r) => [esc(r.reference), esc(r.date), esc(r.couleur), r.quantite, r.prixAchat].join(";")),
-    `TOTAL;;;${totalQte};`,
+    "Référence;Date;Couleur;Description;Quantité;Prix d'achat (XAF)",
+    ...rows.map((r) => [esc(r.reference), esc(r.date), esc(r.couleur), esc(r.description), r.quantite, r.prixAchat].join(";")),
+    `TOTAL;;;;${totalQte};`,
   ];
   const csv = "﻿" + lines.join("\r\n");
 

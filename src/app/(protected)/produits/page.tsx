@@ -12,6 +12,7 @@ import Image from "next/image";
 import type { Role } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { ClickableRow } from "@/components/shared/ClickableRow";
+import { ExportStockModal } from "@/components/produits/ExportStockModal";
 import { Package, AlertTriangle, Archive } from "lucide-react";
 
 interface SearchParams {
@@ -102,6 +103,7 @@ export default async function ProduitsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportStockModal />
           <Link
             href="/produits/archives"
             className="relative z-10 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
