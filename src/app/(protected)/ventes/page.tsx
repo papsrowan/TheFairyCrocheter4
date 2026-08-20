@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PAGE /ventes — Liste des ventes avec filtres et recherche
+// PAGE /ventes — Liste des ventes avec filtres, recherche et règlements de crédit
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Metadata } from "next";
@@ -8,9 +8,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hasPermission } from "@/lib/security/rbac";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
-import { Plus, Search, Receipt, TrendingUp, Clock } from "lucide-react";
+import { Plus, Search, Receipt, TrendingUp, Clock, Banknote } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { ClickableRow } from "@/components/shared/ClickableRow";
+import { cn } from "@/lib/utils/cn";
 
 export const metadata: Metadata = { title: "Ventes" };
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ interface PageProps {
     page?:           string;
     statut?:         string;
     statutPaiement?: string;
+    typeFlux?:       string; // "TOUS" | "VENTES" | "REGLEMENTS"
     search?:         string;
     dateDebut?:      string;
     dateFin?:        string;
@@ -50,6 +52,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
   const pageSize       = 20;
   const statut         = searchParams.statut as "COMPLETEE" | "ANNULEE" | "REMBOURSEE" | undefined;
   const statutPaiement = searchParams.statutPaiement as "PAYE" | "EN_ATTENTE" | undefined;
+  const typeFlux       = searchParams.typeFlux;
   const search         = searchParams.search;
   const dateDebut      = searchParams.dateDebut;
   const dateFin        = searchParams.dateFin;
@@ -83,19 +86,48 @@ export default async function VentesPage({ searchParams }: PageProps) {
     }),
   };
 
-  const [ventes, total, statsAujourdhui] = await Promise.all([
-    prisma.vente.findMany({
-      where,
-      include: {
-        client: { select: { nom: true, prenom: true } },
-        vendeur: { select: { nom: true, prenom: true } },
-        lignes: { select: { id: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.vente.count({ where }),
+  const shouldFetchVentes = typeFlux !== "REGLEMENTS";
+  const shouldFetchReglements = typeFlux !== "VENTES" && !statut;
+
+  const [ventes, totalVentes, reglementsCredit, statsAujourdhui] = await Promise.all([
+    shouldFetchVentes
+      ? prisma.vente.findMany({
+          where,
+          include: {
+            client: { select: { nom: true, prenom: true } },
+            vendeur: { select: { nom: true, prenom: true } },
+            lignes: { select: { id: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        })
+      : Promise.resolve([]),
+    shouldFetchVentes ? prisma.vente.count({ where }) : Promise.resolve(0),
+    shouldFetchReglements
+      ? prisma.ecritureFinanciere.findMany({
+          where: {
+            type: "RECETTE_VENTE",
+            description: { startsWith: "Règlement crédit" },
+            ...(dateFilter ? { date: dateFilter } : {}),
+            ...(search ? {
+              OR: [
+                { description: { contains: search, mode: "insensitive" as const } },
+                { vente: { client: { nom: { contains: search, mode: "insensitive" as const } } } },
+              ],
+            } : {}),
+          },
+          include: {
+            vente: {
+              include: {
+                client: { select: { nom: true, prenom: true } },
+              },
+            },
+          },
+          orderBy: { date: "desc" },
+          take: pageSize,
+        })
+      : Promise.resolve([]),
     // Stats du jour
     prisma.vente.aggregate({
       where: {
@@ -109,7 +141,17 @@ export default async function VentesPage({ searchParams }: PageProps) {
     }),
   ]);
 
-  const totalPages = Math.ceil(total / pageSize);
+  type RowItem =
+    | { kind: "VENTE"; data: typeof ventes[0]; date: Date }
+    | { kind: "REGLEMENT"; data: typeof reglementsCredit[0]; date: Date };
+
+  const mergedRows: RowItem[] = [
+    ...ventes.map((v) => ({ kind: "VENTE" as const, data: v, date: v.createdAt })),
+    ...reglementsCredit.map((r) => ({ kind: "REGLEMENT" as const, data: r, date: r.date })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const total = totalVentes + reglementsCredit.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Conserver tous les filtres actifs dans les liens de pagination
   const lienPage = (p: number) => {
@@ -117,6 +159,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
     params.set("page", String(p));
     if (statut)         params.set("statut", statut);
     if (statutPaiement) params.set("statutPaiement", statutPaiement);
+    if (typeFlux)       params.set("typeFlux", typeFlux);
     if (search)         params.set("search", search);
     if (dateDebut)      params.set("dateDebut", dateDebut);
     if (dateFin)        params.set("dateFin", dateFin);
@@ -129,9 +172,10 @@ export default async function VentesPage({ searchParams }: PageProps) {
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Ventes</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Ventes &amp; Règlements</h1>
           <p className="text-muted-foreground text-sm">
-            {total} vente{total > 1 ? "s" : ""} au total
+            {totalVentes} vente{totalVentes > 1 ? "s" : ""}
+            {reglementsCredit.length > 0 && ` · ${reglementsCredit.length} règlement(s) de crédit`}
           </p>
         </div>
         {canCreate && (
@@ -182,6 +226,12 @@ export default async function VentesPage({ searchParams }: PageProps) {
             placeholder="Numéro ou client..."
             className="h-9 rounded-md border bg-background pl-8 pr-3 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
+        <select name="typeFlux" defaultValue={typeFlux ?? ""}
+          className="h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring font-medium">
+          <option value="">Toutes opérations (Ventes + Règlements)</option>
+          <option value="VENTES">Ventes uniquement</option>
+          <option value="REGLEMENTS">Règlements de crédit uniquement</option>
+        </select>
         <select name="statut" defaultValue={statut ?? ""}
           className="h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
           <option value="">Tous statuts</option>
@@ -193,7 +243,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
           className="h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
           <option value="">Tout paiement</option>
           <option value="PAYE">Payé</option>
-          <option value="EN_ATTENTE">En attente</option>
+          <option value="EN_ATTENTE">En attente (Crédit / Dette)</option>
         </select>
         <input type="date" name="dateDebut" defaultValue={dateDebut ?? ""}
           className="h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -212,7 +262,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
           className="h-9 rounded-md bg-primary text-primary-foreground px-3 text-sm font-medium hover:bg-primary/90 transition-colors">
           Filtrer
         </button>
-        {(search || statut || statutPaiement || dateDebut || dateFin || heure) && (
+        {(search || statut || statutPaiement || typeFlux || dateDebut || dateFin || heure) && (
           <a href="/ventes" className="h-9 flex items-center px-3 rounded-md border text-sm text-muted-foreground hover:bg-muted transition-colors">
             Réinitialiser
           </a>
@@ -225,28 +275,88 @@ export default async function VentesPage({ searchParams }: PageProps) {
           <table className="data-table">
             <thead>
               <tr className="bg-muted/50">
-                <th className="px-4 py-3">Numéro</th>
+                <th className="px-4 py-3">Numéro / Transaction</th>
                 <th className="px-4 py-3 hidden sm:table-cell">Date</th>
                 <th className="px-4 py-3 hidden md:table-cell">Client</th>
-                <th className="px-4 py-3 hidden lg:table-cell">Articles</th>
+                <th className="px-4 py-3 hidden lg:table-cell">Articles / Type</th>
                 <th className="px-4 py-3 hidden lg:table-cell">Paiement</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Statut</th>
+                <th className="px-4 py-3">Montant</th>
+                <th className="px-4 py-3">Statut &amp; Solde</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {ventes.length === 0 ? (
+              {mergedRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-muted-foreground">
-                    Aucune vente trouvée
+                    Aucune transaction trouvée
                   </td>
                 </tr>
               ) : (
-                ventes.map((vente) => {
+                mergedRows.map((row, idx) => {
+                  if (row.kind === "REGLEMENT") {
+                    const reg = row.data;
+                    const meta = reg.metadata as { modePaiement?: string; reste?: number } | null;
+                    const estSolde = meta?.reste !== undefined && meta.reste <= 0;
+                    const vNum = reg.vente?.numero ?? "Vente";
+                    const vUrl = reg.venteId ? `/ventes/${reg.venteId}` : "#";
+
+                    return (
+                      <ClickableRow key={`reg-${reg.id}-${idx}`} href={vUrl} className="bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-50/80 transition-colors">
+                        <td className="px-4 py-3 font-mono text-sm font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                              <Banknote className="h-3 w-3" /> Règlement
+                            </span>
+                            <span className="text-primary font-semibold">{vNum}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
+                          {formatDateTime(reg.date)}
+                        </td>
+                        <td className="px-4 py-3 text-sm hidden md:table-cell">
+                          {reg.vente?.client
+                            ? `${reg.vente.client.prenom ?? ""} ${reg.vente.client.nom}`.trim()
+                            : <span className="text-muted-foreground italic">Anonyme</span>}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground italic hidden lg:table-cell">
+                          Paiement dette
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">
+                          {meta?.modePaiement ? (PAIEMENT_LABELS[meta.modePaiement] ?? meta.modePaiement) : "Espèces"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-green-600">+{formatCurrency(reg.montant)}</span>
+                          <p className="text-[11px] text-muted-foreground">
+                            {meta?.reste !== undefined
+                              ? (meta.reste <= 0 ? "Reste dû: 0 XAF (Soldé)" : `Reste dû: ${formatCurrency(meta.reste)}`)
+                              : "Règlement reçu"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn("status-badge", estSolde ? "status-success" : "status-warning")}>
+                            {estSolde ? "Crédit Soldé" : "Acompte"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {reg.venteId && (
+                            <Link href={`/ventes/${reg.venteId}`} className="relative z-10 text-xs text-primary hover:underline block font-medium">
+                              Voir vente →
+                            </Link>
+                          )}
+                        </td>
+                      </ClickableRow>
+                    );
+                  }
+
+                  // Cas VENTE
+                  const vente = row.data;
                   const statutInfo = STATUT_LABELS[vente.statut];
+                  const estCredit = vente.modePaiement === "CREDIT";
+                  const resteDu = Math.max(0, vente.total - (vente.montantPaye ?? 0));
+
                   return (
-                    <ClickableRow key={vente.id} href={`/ventes/${vente.id}`} className="hover:bg-muted/30 transition-colors">
+                    <ClickableRow key={`vente-${vente.id}`} href={`/ventes/${vente.id}`} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 font-mono text-sm font-medium text-primary">
                         {vente.numero}
                       </td>
@@ -259,22 +369,39 @@ export default async function VentesPage({ searchParams }: PageProps) {
                           : <span className="text-muted-foreground italic">Anonyme</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-center hidden lg:table-cell">
-                        {vente.lignes.length}
+                        {vente.lignes.length} article{vente.lignes.length > 1 ? "s" : ""}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">
-                        {PAIEMENT_LABELS[vente.modePaiement]}
+                        {estCredit ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            Crédit
+                          </span>
+                        ) : (
+                          PAIEMENT_LABELS[vente.modePaiement] ?? vente.modePaiement
+                        )}
                       </td>
-                      <td className="px-4 py-3 font-semibold">{formatCurrency(vente.total)}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold">{formatCurrency(vente.total)}</span>
+                        {estCredit && (
+                          vente.statutPaiement === "PAYE" ? (
+                            <p className="text-[11px] text-green-600 font-medium">Soldé (100% payé)</p>
+                          ) : (
+                            <p className="text-[11px] text-amber-600 font-medium">
+                              Payé : {formatCurrency(vente.montantPaye ?? 0)} · Reste : {formatCurrency(resteDu)}
+                            </p>
+                          )
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={statutInfo.class}>{statutInfo.label}</span>
                       </td>
                       <td className="px-4 py-3">
                         {vente.statutPaiement === "EN_ATTENTE" && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mb-1">
-<Clock className="h-3 w-3" /> En attente
+                            <Clock className="h-3 w-3" /> En attente
                           </span>
                         )}
-                        <Link href={`/ventes/${vente.id}`} className="relative z-10 text-xs text-primary hover:underline block">
+                        <Link href={`/ventes/${vente.id}`} className="relative z-10 text-xs text-primary hover:underline block font-medium">
                           Voir →
                         </Link>
                       </td>
@@ -316,3 +443,4 @@ export default async function VentesPage({ searchParams }: PageProps) {
     </div>
   );
 }
+

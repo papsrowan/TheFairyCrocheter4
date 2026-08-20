@@ -10,6 +10,7 @@ import { ShareButton } from "@/components/documents/ShareButton";
 import { VenteActionsWrapper } from "./VenteActionsWrapper";
 import { VenteEditButton } from "./VenteEditButton";
 import { RemboursementCreditButton } from "./RemboursementCreditButton";
+import { cn } from "@/lib/utils/cn";
 import type { Role } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -61,6 +62,9 @@ export default async function VenteDetailPage({ params }: Params) {
             variante: { select: { id: true, couleur: true } },
           },
           orderBy: { id: "asc" },
+        },
+        ecrituresFinancieres: {
+          orderBy: { date: "asc" },
         },
       },
     }),
@@ -272,6 +276,67 @@ export default async function VenteDetailPage({ params }: Params) {
           </div>
         </div>
       </div>
+
+      {/* Récapitulatif Paiements & Règlements (notamment pour crédits & acomptes) */}
+      {vente.ecrituresFinancieres.length > 0 && (
+        <div className="card p-5 space-y-4 border-l-4 border-l-primary">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-base flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" />
+              Paiements &amp; Règlements enregistrés
+            </h2>
+            <span className={cn(
+              "text-xs px-2.5 py-1 rounded-full font-bold",
+              vente.statutPaiement === "PAYE" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+            )}>
+              {vente.statutPaiement === "PAYE" ? "Entièrement payé / Soldé" : "En attente de règlement"}
+            </span>
+          </div>
+
+          {/* Grille résumé si vente à crédit */}
+          {vente.modePaiement === "CREDIT" && (
+            <div className="grid grid-cols-3 gap-3 p-3 bg-secondary/50 rounded-xl text-center text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Total vente</p>
+                <p className="font-bold text-foreground">{formatCurrency(vente.total)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Déjà réglé</p>
+                <p className="font-bold text-green-600">{formatCurrency(vente.montantPaye ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Reste à payer</p>
+                <p className="font-bold text-red-600">{formatCurrency(Math.max(0, vente.total - (vente.montantPaye ?? 0)))}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="divide-y divide-border/60">
+            {vente.ecrituresFinancieres.map((ef) => {
+              const meta = ef.metadata as { modePaiement?: string; reste?: number } | null;
+              return (
+                <div key={ef.id} className="py-2.5 flex items-center justify-between text-sm">
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-foreground">{ef.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDateTime(ef.date)}
+                      {meta?.modePaiement && ` · Mode : ${PAIEMENT_LABELS[meta.modePaiement] ?? meta.modePaiement}`}
+                      {meta?.reste !== undefined && (
+                        meta.reste <= 0
+                          ? ` · Reste dû : 0 XAF (Soldé)`
+                          : ` · Reste dû : ${formatCurrency(meta.reste)}`
+                      )}
+                    </p>
+                  </div>
+                  <span className={cn("font-bold", ef.montant >= 0 ? "text-green-600" : "text-red-500")}>
+                    {ef.montant >= 0 ? `+${formatCurrency(ef.montant)}` : formatCurrency(ef.montant)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Actions documents */}
       {canDocs && vente.statut === "COMPLETEE" && (
