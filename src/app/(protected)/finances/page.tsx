@@ -50,12 +50,12 @@ export default async function FinancesPage() {
       where: { date: { gte: debutAnnee } },
       _sum: { montant: true },
     }),
-    // Ventes des 7 derniers jours (pour graphique)
-    prisma.$queryRaw<Array<{ jour: Date; total: number; nb: bigint }>>`
-      SELECT DATE(created_at) as jour, SUM(total) as total, COUNT(*) as nb
+    // Ventes des 7 derniers jours (pour volume de ventes conclues)
+    prisma.$queryRaw<Array<{ jour: string; total: number; nb: number }>>`
+      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') AS jour, SUM(total)::float AS total, COUNT(*)::int AS nb
       FROM ventes
       WHERE statut = 'COMPLETEE' AND created_at >= ${debut7j}
-      GROUP BY DATE(created_at)
+      GROUP BY 1
       ORDER BY jour ASC
     `,
     // Top 5 produits vendus ce mois
@@ -79,16 +79,16 @@ export default async function FinancesPage() {
       include: { client: { select: { nom: true, prenom: true } } },
       orderBy: { dateEcheance: "asc" },
     }),
-    // Ecritures financieres 7 derniers jours
-    prisma.$queryRaw<Array<{ jour: Date; type: string; total: number }>>`
-      SELECT DATE(date) AS jour, type::text AS type, SUM(montant)::float AS total
+    // Ecritures financieres 7 derniers jours (encaissements réels)
+    prisma.$queryRaw<Array<{ jour: string; type: string; total: number }>>`
+      SELECT TO_CHAR(date, 'YYYY-MM-DD') AS jour, type::text AS type, SUM(montant)::float AS total
       FROM ecritures_financieres
       WHERE date >= ${debut7j}
       GROUP BY 1, 2
     `,
     // COGS 7 derniers jours
-    prisma.$queryRaw<Array<{ jour: Date; cogs: number }>>`
-      SELECT DATE(v.created_at) AS jour, SUM(lv.quantite * p.prix_achat)::float AS cogs
+    prisma.$queryRaw<Array<{ jour: string; cogs: number }>>`
+      SELECT TO_CHAR(v.created_at, 'YYYY-MM-DD') AS jour, SUM(lv.quantite * p.prix_achat)::float AS cogs
       FROM lignes_ventes lv
       JOIN ventes v ON v.id = lv.vente_id
       JOIN produits p ON p.id = lv.produit_id
@@ -149,13 +149,13 @@ export default async function FinancesPage() {
 
   // ── Historique mensuel (sur plusieurs mois / années) ────────────────────────
   const [ecrituresParMois, cogsParMois] = await Promise.all([
-    prisma.$queryRaw<Array<{ mois: Date; type: string; total: number }>>`
-      SELECT DATE_TRUNC('month', date) AS mois, type::text AS type, SUM(montant)::float AS total
+    prisma.$queryRaw<Array<{ mois: string; type: string; total: number }>>`
+      SELECT TO_CHAR(date, 'YYYY-MM') AS mois, type::text AS type, SUM(montant)::float AS total
       FROM ecritures_financieres
       GROUP BY 1, 2
     `,
-    prisma.$queryRaw<Array<{ mois: Date; cogs: number }>>`
-      SELECT DATE_TRUNC('month', v.created_at) AS mois, SUM(lv.quantite * p.prix_achat)::float AS cogs
+    prisma.$queryRaw<Array<{ mois: string; cogs: number }>>`
+      SELECT TO_CHAR(v.created_at, 'YYYY-MM') AS mois, SUM(lv.quantite * p.prix_achat)::float AS cogs
       FROM lignes_ventes lv
       JOIN ventes v ON v.id = lv.vente_id
       JOIN produits p ON p.id = lv.produit_id
@@ -165,18 +165,17 @@ export default async function FinancesPage() {
   ]);
 
   const histMap = new Map<string, { recette: number; remb: number; depense: number; cogs: number }>();
-  const cleMois = (d: Date) => new Date(d).toISOString().slice(0, 7); // "AAAA-MM"
   const ligneHist = (k: string) => {
     if (!histMap.has(k)) histMap.set(k, { recette: 0, remb: 0, depense: 0, cogs: 0 });
     return histMap.get(k)!;
   };
   for (const e of ecrituresParMois) {
-    const r = ligneHist(cleMois(e.mois));
+    const r = ligneHist(e.mois);
     if (e.type === "RECETTE_VENTE") r.recette += e.total;
     else if (e.type === "REMBOURSEMENT") r.remb += e.total;
     else if (e.type === "DEPENSE") r.depense += e.total;
   }
-  for (const c of cogsParMois) ligneHist(cleMois(c.mois)).cogs += c.cogs ?? 0;
+  for (const c of cogsParMois) ligneHist(c.mois).cogs += c.cogs ?? 0;
 
   const historique = Array.from(histMap.entries())
     .map(([mois, v]) => {
@@ -205,43 +204,53 @@ export default async function FinancesPage() {
     return { mois: key, ca: row ? row.recette + row.remb : 0 };
   });
 
-  // Jours des 7 derniers jours
+  // Jours des 7 derniers jours (du plus ancien au plus récent)
   const joursLabels = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(debut7j); d.setDate(debut7j.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    const d = new Date(debut7j);
+    d.setDate(debut7j.getDate() + i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   });
-  const joursData = joursLabels.map((date) => {
-    const found = ventesParJour.find((v) => {
-      const d = new Date(v.jour);
-      return d.toISOString().slice(0, 10) === date;
-    });
-    return { date, total: found ? Number(found.total) : 0, nb: found ? Number(found.nb) : 0 };
-  });
-  const maxTotal = Math.max(...joursData.map((j) => j.total), 1);
 
   const joursHistTable = joursLabels.map((dateStr) => {
-    const foundVentes = ventesParJour.find((v) => new Date(v.jour).toISOString().slice(0, 10) === dateStr);
-    const recs = ecritures7j
-      .filter((e) => new Date(e.jour).toISOString().slice(0, 10) === dateStr && (e.type === "RECETTE_VENTE" || e.type === "REMBOURSEMENT"))
-      .reduce((s, e) => s + e.total, 0);
-    const depsSaisies = ecritures7j
-      .filter((e) => new Date(e.jour).toISOString().slice(0, 10) === dateStr && e.type === "DEPENSE")
-      .reduce((s, e) => s + e.total, 0);
-    const foundCogs = cogs7j.find((c) => new Date(c.jour).toISOString().slice(0, 10) === dateStr);
-    const cogsVal = foundCogs?.cogs ?? 0;
+    const foundVentes = ventesParJour.find((v) => v.jour === dateStr);
+    const totalVentesRealisees = foundVentes ? Number(foundVentes.total) : 0;
+    const nbVentes = foundVentes ? Number(foundVentes.nb) : 0;
 
-    const caNet = recs || (foundVentes ? Number(foundVentes.total) : 0);
+    const recs = ecritures7j
+      .filter((e) => e.jour === dateStr && (e.type === "RECETTE_VENTE" || e.type === "REMBOURSEMENT"))
+      .reduce((s, e) => s + e.total, 0);
+
+    const depsSaisies = ecritures7j
+      .filter((e) => e.jour === dateStr && e.type === "DEPENSE")
+      .reduce((s, e) => s + e.total, 0);
+
+    const foundCogs = cogs7j.find((c) => c.jour === dateStr);
+    const cogsVal = foundCogs ? Number(foundCogs.cogs) : 0;
+
+    const caNet = recs; // Strictement les encaissements réels (CA net)
     const depenses = depsSaisies + cogsVal;
     const benefice = caNet - depenses;
 
     return {
       dateStr,
       caNet,
+      totalVentesRealisees,
       depenses,
       benefice,
-      nbVentes: foundVentes ? Number(foundVentes.nb) : 0,
+      nbVentes,
     };
-  }).reverse();
+  });
+
+  const joursData = joursHistTable.map((h) => ({
+    date: h.dateStr,
+    total: h.caNet,
+    nb: h.nbVentes,
+    totalVentesRealisees: h.totalVentesRealisees,
+  }));
+  const maxTotal = Math.max(...joursData.map((j) => j.total), 1);
 
   const facturesEnRetard  = facturesEnAttente.filter((v) => v.dateEcheance && v.dateEcheance < now);
   const facturesARecevoir = facturesEnAttente.filter((v) => !v.dateEcheance || v.dateEcheance >= now);
@@ -364,9 +373,11 @@ export default async function FinancesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Graphique 7 jours */}
         <div className="card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-sm">CA — 7 derniers jours</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <h2 className="font-semibold text-sm">Recettes encaissées — 7 derniers jours</h2>
+            </div>
           </div>
           <div className="flex items-end gap-1.5 h-32">
             {joursData.map((j) => {
@@ -376,7 +387,7 @@ export default async function FinancesPage() {
               return (
                 <div key={j.date} className="flex-1 flex flex-col items-center gap-1 group">
                   <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {j.nb > 0 ? formatCurrency(j.total) : ""}
+                    {formatCurrency(j.total)}
                   </span>
                   <div className="w-full rounded-t-sm bg-primary/20 relative" style={{ height: "100px" }}>
                     <div
@@ -392,24 +403,28 @@ export default async function FinancesPage() {
           </div>
           {/* Tableau synthétique 7 jours */}
           <div className="mt-4 border-t pt-3 overflow-x-auto">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">Détail financier (7 jours)</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Détail financier quotidien (7 derniers jours)</p>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b">
                   <th className="text-left py-1.5 font-medium">Jour</th>
-                  <th className="text-right font-medium">Recettes</th>
+                  <th className="text-right font-medium">Recettes (CA net)</th>
+                  <th className="text-right font-medium hidden sm:table-cell">Ventes réalisées</th>
                   <th className="text-right font-medium">Dépenses</th>
                   <th className="text-right font-medium">Bénéfice</th>
                 </tr>
               </thead>
               <tbody>
-                {joursHistTable.map((h) => {
+                {[...joursHistTable].reverse().map((h) => {
                   const d = new Date(h.dateStr + "T12:00:00");
                   const label = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(d);
                   return (
                     <tr key={h.dateStr} className="border-b border-border/30">
                       <td className="py-1.5 font-medium capitalize">{label}</td>
                       <td className="text-right tabular-nums text-green-600 font-medium">{formatCurrency(h.caNet)}</td>
+                      <td className="text-right tabular-nums text-muted-foreground hidden sm:table-cell">
+                        {formatCurrency(h.totalVentesRealisees)} <span className="text-[10px]">({h.nbVentes}v)</span>
+                      </td>
                       <td className="text-right tabular-nums text-red-500">{formatCurrency(h.depenses)}</td>
                       <td className={cn("text-right tabular-nums font-bold", h.benefice >= 0 ? "text-primary" : "text-destructive")}>
                         {formatCurrency(h.benefice)}
