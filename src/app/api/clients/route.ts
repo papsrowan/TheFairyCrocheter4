@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
   const limit      = Math.min(100, parseInt(searchParams.get("limit") ?? "20"));
   const search     = searchParams.get("search")?.trim() ?? "";
   const categorieId = searchParams.get("categorieId") ?? "";
+  const tri        = searchParams.get("tri") ?? "alpha";
 
   const where: Prisma.ClientWhereInput = {
     // Exclure les clients anonymisés de la liste normale
@@ -54,6 +55,13 @@ export async function GET(req: NextRequest) {
   }
   if (categorieId) where.categorieId = categorieId;
 
+  const orderBy: Prisma.ClientOrderByWithRelationInput =
+    tri === "ventes" || tri === "montant" ? { totalAchats: "desc" } :
+    tri === "nb_ventes"                   ? { ventes: { _count: "desc" } } :
+    tri === "recent"                      ? { dernierAchat: "desc" }       :
+    tri === "desc"                        ? { nom: "desc" }                :
+                                            { nom: "asc" };
+
   const skip = (page - 1) * limit;
 
   const [clients, total] = await Promise.all([
@@ -63,7 +71,7 @@ export async function GET(req: NextRequest) {
         categorie: true,
         _count: { select: { ventes: true } },
       },
-      orderBy: { nom: "asc" },
+      orderBy,
       skip,
       take: limit,
     }),

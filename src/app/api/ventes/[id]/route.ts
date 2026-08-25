@@ -67,6 +67,7 @@ export async function PUT(
     modePaiement: string;
     remiseGlobale: number;
     notes?: string | null;
+    dateFacture?: string | null;
     lignes: Array<{ produitId: string; varianteId?: string | null; quantite: number; prixUnitaire: number; remise: number; tauxTVA: number }>;
   };
   try { body = await req.json(); }
@@ -80,6 +81,11 @@ export async function PUT(
   });
   if (!venteActuelle) return NextResponse.json({ error: "Vente introuvable" }, { status: 404 });
   if (venteActuelle.statut !== "COMPLETEE") return NextResponse.json({ error: "Seules les ventes complétées sont modifiables" }, { status: 409 });
+
+  const nouvelleDate = body.dateFacture ? new Date(body.dateFacture) : null;
+  if (nouvelleDate && isNaN(nouvelleDate.getTime())) {
+    return NextResponse.json({ error: "Date de vente invalide" }, { status: 422 });
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -150,17 +156,40 @@ export async function PUT(
         });
       }
 
-      // 4. Mettre à jour la vente
+      // 4. Mettre à jour la vente (y compris la date / antidatage si fournie)
       const venteMaj = await tx.vente.update({
         where: { id: venteActuelle.id },
-        data: { clientId: body.clientId ?? null, modePaiement: body.modePaiement as import("@prisma/client").ModePaiement, remiseGlobale: body.remiseGlobale, notes: body.notes ?? null, sousTotal, montantTVA, total },
+        data: {
+          clientId: body.clientId ?? null,
+          modePaiement: body.modePaiement as import("@prisma/client").ModePaiement,
+          remiseGlobale: body.remiseGlobale,
+          notes: body.notes ?? null,
+          sousTotal,
+          montantTVA,
+          total,
+          ...(nouvelleDate ? { dateFacture: nouvelleDate, createdAt: nouvelleDate } : {}),
+        },
       });
 
-      // 5. Corriger l'écriture financière
+      // 5. Corriger les écritures financières (montant et date)
+      if (nouvelleDate) {
+        await tx.ecritureFinanciere.updateMany({
+          where: { venteId: venteActuelle.id },
+          data: { date: nouvelleDate },
+        });
+      }
+
       const delta = total - venteActuelle.total;
       if (delta !== 0) {
         await tx.ecritureFinanciere.create({
-          data: { venteId: venteActuelle.id, type: "RECETTE_VENTE", montant: delta, description: `Correction vente ${venteActuelle.numero} (+${delta > 0 ? "+" : ""}${delta} XAF)`, metadata: { operateur: session.user.id } },
+          data: {
+            venteId: venteActuelle.id,
+            type: "RECETTE_VENTE",
+            montant: delta,
+            description: `Correction vente ${venteActuelle.numero} (+${delta > 0 ? "+" : ""}${delta} XAF)`,
+            date: nouvelleDate ?? venteActuelle.createdAt,
+            metadata: { operateur: session.user.id },
+          },
         });
       }
 
@@ -175,7 +204,19 @@ export async function PUT(
       return venteMaj;
     });
 
-    await audit({ userId: session.user.id, action: AUDIT_ACTIONS.VENTE_UPDATED, entityId: venteActuelle.id, entityType: "vente", details: { numero: venteActuelle.numero, ancienTotal: venteActuelle.total, nouveauTotal: result.total } });
+    await audit({
+      userId: session.user.id,
+      action: AUDIT_ACTIONS.VENTE_UPDATED,
+      entityId: venteActuelle.id,
+      entityType: "vente",
+      details: {
+        numero: venteActuelle.numero,
+        ancienTotal: venteActuelle.total,
+        nouveauTotal: result.total,
+        ancienneDate: venteActuelle.dateFacture ?? venteActuelle.createdAt,
+        nouvelleDate: nouvelleDate ?? (venteActuelle.dateFacture ?? venteActuelle.createdAt),
+      },
+    });
     emitSSE("vente.updated", { venteId: venteActuelle.id, numero: venteActuelle.numero });
 
     return NextResponse.json({ data: result });

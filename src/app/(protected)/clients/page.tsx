@@ -40,7 +40,7 @@ export default async function ClientsPage({
   const page   = Math.max(1, parseInt(sp.page ?? "1"));
   const limit  = 20;
   const search = sp.search?.trim() ?? "";
-  const tri    = ["ventes", "desc", "recent"].includes(sp.tri ?? "") ? sp.tri! : "alpha";
+  const tri    = ["ventes", "montant", "nb_ventes", "desc", "recent"].includes(sp.tri ?? "") ? sp.tri! : "alpha";
 
   const canCreate = hasPermission(role, "clients:create");
   const canEdit   = hasPermission(role, "clients:update");
@@ -59,10 +59,11 @@ export default async function ClientsPage({
   }
 
   const orderBy: Prisma.ClientOrderByWithRelationInput =
-    tri === "ventes" ? { ventes: { _count: "desc" } } :
-    tri === "recent" ? { dernierAchat: "desc" }         :
-    tri === "desc"   ? { nom: "desc" }                  :
-                       { nom: "asc" };
+    tri === "ventes" || tri === "montant" ? { totalAchats: "desc" } :
+    tri === "nb_ventes"                   ? { ventes: { _count: "desc" } } :
+    tri === "recent"                      ? { dernierAchat: "desc" }       :
+    tri === "desc"                        ? { nom: "desc" }                :
+                                            { nom: "asc" };
 
   // ── Données ───────────────────────────────────────────────────────────────
   const [clients, total, stats] = await Promise.all([
@@ -144,8 +145,9 @@ export default async function ClientsPage({
         <select name="tri" defaultValue={tri} className="pos-input w-56">
           <option value="alpha">A → Z (croissant)</option>
           <option value="desc">Z → A (décroissant)</option>
+          <option value="ventes">Plus d&apos;achats (montant total)</option>
+          <option value="nb_ventes">Nombre de ventes (volume)</option>
           <option value="recent">Activité la plus récente</option>
-          <option value="ventes">Plus de ventes</option>
         </select>
         <button
           type="submit"

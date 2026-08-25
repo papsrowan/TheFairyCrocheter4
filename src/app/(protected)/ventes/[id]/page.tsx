@@ -393,6 +393,8 @@ export default async function VenteDetailPage({ params }: Params) {
           vente={{
             id: vente.id,
             numero: vente.numero,
+            dateFacture: vente.dateFacture ? new Date(vente.dateFacture).toISOString() : null,
+            createdAt: new Date(vente.createdAt).toISOString(),
             clientId: vente.client?.id,
             clientNom: vente.client ? `${vente.client.prenom ?? ""} ${vente.client.nom}`.trim() : undefined,
             modePaiement: vente.modePaiement,

@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import {
   X, Plus, Trash2, Minus, Percent, Search,
-  Loader2, CheckCircle, User, CreditCard, Banknote, ArrowLeftRight, AlertTriangle,
+  Loader2, CheckCircle, User, CreditCard, Banknote, ArrowLeftRight, AlertTriangle, Calendar,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -49,6 +49,8 @@ function calcTotal(lignes: LigneEdit[], remiseGlobale: number) {
 interface Props {
   vente: {
     id: string; numero: string;
+    dateFacture?: string | null;
+    createdAt?: string;
     clientId?: string | null; clientNom?: string;
     modePaiement: string; remiseGlobale: number; notes?: string | null;
     lignes: Array<{ produitId: string; varianteId?: string | null; couleur?: string | null; variantes?: Variante[]; nom: string; prixUnitaire: number; tauxTVA: number; quantite: number; remise: number }>;
@@ -69,6 +71,17 @@ export function VenteEditModal({ vente, onClose }: Props) {
   const [modePaiement,  setModePaiement]  = useState(vente.modePaiement);
   const [remiseGlobale, setRemiseGlobale] = useState(vente.remiseGlobale);
   const [notes,         setNotes]         = useState(vente.notes ?? "");
+
+  const initialDateStr = (() => {
+    const raw = vente.dateFacture ?? vente.createdAt;
+    if (!raw) return new Date().toISOString().split("T")[0];
+    try {
+      return new Date(raw).toISOString().split("T")[0];
+    } catch {
+      return new Date().toISOString().split("T")[0];
+    }
+  })();
+  const [dateVente,     setDateVente]     = useState(initialDateStr);
   const [prodSearch,    setProdSearch]    = useState("");
   const [clientSearch,  setClientSearch]  = useState("");
   const [showProdDD,    setShowProdDD]    = useState(false);
@@ -131,8 +144,19 @@ export function VenteEditModal({ vente, onClose }: Props) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId, modePaiement, remiseGlobale, notes: notes || null,
-          lignes: lignes.map(l => ({ produitId: l.produitId, varianteId: l.varianteId ?? null, quantite: l.quantite, prixUnitaire: l.prixUnitaire, remise: l.remise, tauxTVA: l.tauxTVA })),
+          clientId,
+          modePaiement,
+          remiseGlobale,
+          notes: notes || null,
+          dateFacture: dateVente ? new Date(dateVente).toISOString() : null,
+          lignes: lignes.map(l => ({
+            produitId: l.produitId,
+            varianteId: l.varianteId ?? null,
+            quantite: l.quantite,
+            prixUnitaire: l.prixUnitaire,
+            remise: l.remise,
+            tauxTVA: l.tauxTVA,
+          })),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -271,6 +295,30 @@ export function VenteEditModal({ vente, onClose }: Props) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Date de la vente & Antidatage */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-primary" />
+                Date de la vente (Antidatage / Correction de date)
+              </label>
+              {dateVente !== initialDateStr && (
+                <span className="text-xs font-medium text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
+                  Date modifiée
+                </span>
+              )}
+            </div>
+            <input
+              type="date"
+              value={dateVente}
+              onChange={e => setDateVente(e.target.value)}
+              className="w-full h-9 rounded-lg border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Modifiez cette date pour corriger une erreur d&apos;antidatage. La date comptable et l&apos;historique de la vente seront mis à jour.
+            </p>
           </div>
 
           {/* Mode paiement + remise globale */}
