@@ -25,7 +25,7 @@ export default async function FinancesPage() {
   const debutMoisPrecedent = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const finMoisPrecedent   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
   const debutAnnee         = new Date(now.getFullYear(), 0, 1);
-  const debut7j            = new Date(now); debut7j.setDate(now.getDate() - 6);
+  const debut7j            = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
 
   const [
     statsMoisActuel, statsMoisPrecedent, statsAnnee,
@@ -52,9 +52,9 @@ export default async function FinancesPage() {
     }),
     // Ventes des 7 derniers jours (pour volume de ventes conclues)
     prisma.$queryRaw<Array<{ jour: string; total: number; nb: number }>>`
-      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') AS jour, SUM(total)::float AS total, COUNT(*)::int AS nb
+      SELECT TO_CHAR(COALESCE(date_facture, created_at), 'YYYY-MM-DD') AS jour, SUM(total)::float AS total, COUNT(*)::int AS nb
       FROM ventes
-      WHERE statut = 'COMPLETEE' AND created_at >= ${debut7j}
+      WHERE statut = 'COMPLETEE' AND COALESCE(date_facture, created_at) >= ${debut7j}
       GROUP BY 1
       ORDER BY jour ASC
     `,
@@ -88,11 +88,11 @@ export default async function FinancesPage() {
     `,
     // COGS 7 derniers jours
     prisma.$queryRaw<Array<{ jour: string; cogs: number }>>`
-      SELECT TO_CHAR(v.created_at, 'YYYY-MM-DD') AS jour, SUM(lv.quantite * p.prix_achat)::float AS cogs
+      SELECT TO_CHAR(COALESCE(v.date_facture, v.created_at), 'YYYY-MM-DD') AS jour, SUM(lv.quantite * p.prix_achat)::float AS cogs
       FROM lignes_ventes lv
       JOIN ventes v ON v.id = lv.vente_id
       JOIN produits p ON p.id = lv.produit_id
-      WHERE v.statut = 'COMPLETEE' AND v.created_at >= ${debut7j}
+      WHERE v.statut = 'COMPLETEE' AND COALESCE(v.date_facture, v.created_at) >= ${debut7j}
       GROUP BY 1
     `,
   ]);
@@ -155,7 +155,7 @@ export default async function FinancesPage() {
       GROUP BY 1, 2
     `,
     prisma.$queryRaw<Array<{ mois: string; cogs: number }>>`
-      SELECT TO_CHAR(v.created_at, 'YYYY-MM') AS mois, SUM(lv.quantite * p.prix_achat)::float AS cogs
+      SELECT TO_CHAR(COALESCE(v.date_facture, v.created_at), 'YYYY-MM') AS mois, SUM(lv.quantite * p.prix_achat)::float AS cogs
       FROM lignes_ventes lv
       JOIN ventes v ON v.id = lv.vente_id
       JOIN produits p ON p.id = lv.produit_id

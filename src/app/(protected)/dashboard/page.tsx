@@ -82,21 +82,21 @@ export default async function DashboardPage() {
     }),
     prisma.$queryRaw<Array<{ jour: Date; total: number; nb: bigint }>>`
       SELECT
-        DATE_TRUNC('day', created_at) AS jour,
-        SUM(total)::float              AS total,
-        COUNT(*)::bigint               AS nb
+        DATE_TRUNC('day', COALESCE(date_facture, created_at)) AS jour,
+        SUM(total)::float                                      AS total,
+        COUNT(*)::bigint                                       AS nb
       FROM ventes
-      WHERE created_at >= ${il7Jours}
+      WHERE COALESCE(date_facture, created_at) >= ${il7Jours}
         AND statut = 'COMPLETEE'
-      GROUP BY DATE_TRUNC('day', created_at)
+      GROUP BY DATE_TRUNC('day', COALESCE(date_facture, created_at))
       ORDER BY jour ASC
     `,
     // CA par mois sur les 12 derniers mois
     prisma.$queryRaw<Array<{ mois: Date; total: number }>>`
-      SELECT DATE_TRUNC('month', created_at) AS mois, SUM(total)::float AS total
+      SELECT DATE_TRUNC('month', COALESCE(date_facture, created_at)) AS mois, SUM(total)::float AS total
       FROM ventes
-      WHERE created_at >= ${debut12Mois} AND statut = 'COMPLETEE'
-      GROUP BY DATE_TRUNC('month', created_at)
+      WHERE COALESCE(date_facture, created_at) >= ${debut12Mois} AND statut = 'COMPLETEE'
+      GROUP BY DATE_TRUNC('month', COALESCE(date_facture, created_at))
       ORDER BY mois ASC
     `,
     // Notes : propres à l'utilisateur + notes envoyées par les managers (prix spécial)
