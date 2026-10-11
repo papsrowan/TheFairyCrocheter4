@@ -18,14 +18,14 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: {
-    page?:           string;
-    statut?:         string;
+    page?: string;
+    statut?: string;
     statutPaiement?: string;
-    typeFlux?:       string; // "TOUS" | "VENTES" | "REGLEMENTS"
-    search?:         string;
-    dateDebut?:      string;
-    dateFin?:        string;
-    heure?:          string;
+    typeFlux?: string; // "TOUS" | "VENTES" | "REGLEMENTS"
+    search?: string;
+    dateDebut?: string;
+    dateFin?: string;
+    heure?: string;
   };
 }
 
@@ -36,38 +36,38 @@ const STATUT_LABELS = {
 } as const;
 
 const PAIEMENT_LABELS: Record<string, string> = {
-  ESPECES:  "Espèces",
-  CARTE:    "Carte",
+  ESPECES: "Espèces",
+  CARTE: "Carte",
   VIREMENT: "Virement",
-  CHEQUE:   "Chèque",
-  MIXTE:    "Mixte",
-  CREDIT:   "Crédit",
+  CHEQUE: "Chèque",
+  MIXTE: "Mixte",
+  CREDIT: "Crédit",
 };
 
 export default async function VentesPage({ searchParams }: PageProps) {
   const session = await auth();
   const canCreate = hasPermission(session!.user.role as Role, "ventes:create");
 
-  const page           = Math.max(1, parseInt(searchParams.page ?? "1"));
-  const pageSize       = 20;
-  const statut         = searchParams.statut as "COMPLETEE" | "ANNULEE" | "REMBOURSEE" | undefined;
+  const page = Math.max(1, parseInt(searchParams.page ?? "1"));
+  const pageSize = 20;
+  const statut = searchParams.statut as "COMPLETEE" | "ANNULEE" | "REMBOURSEE" | undefined;
   const statutPaiement = searchParams.statutPaiement as "PAYE" | "EN_ATTENTE" | undefined;
-  const typeFlux       = searchParams.typeFlux;
-  const search         = searchParams.search;
-  const dateDebut      = searchParams.dateDebut;
-  const dateFin        = searchParams.dateFin;
-  const heure          = searchParams.heure; // format "HH" ex: "09"
+  const typeFlux = searchParams.typeFlux;
+  const search = searchParams.search;
+  const dateDebut = searchParams.dateDebut;
+  const dateFin = searchParams.dateFin;
+  const heure = searchParams.heure; // format "HH" ex: "09"
 
   // Construction du filtre date/heure
   let dateFilter: { gte?: Date; lte?: Date } | undefined;
   if (dateDebut || dateFin || heure) {
     const gte = dateDebut ? new Date(`${dateDebut}T00:00:00`) : undefined;
-    const lte = dateFin   ? new Date(`${dateFin}T23:59:59`)   : undefined;
+    const lte = dateFin ? new Date(`${dateFin}T23:59:59`) : undefined;
     if (heure) {
       const h = parseInt(heure);
       const base = dateDebut ? new Date(dateDebut) : new Date();
       base.setHours(h, 0, 0, 0);
-      const end  = new Date(base); end.setHours(h, 59, 59, 999);
+      const end = new Date(base); end.setHours(h, 59, 59, 999);
       dateFilter = { gte: base, lte: end };
     } else {
       dateFilter = { ...(gte && { gte }), ...(lte && { lte }) };
@@ -75,9 +75,9 @@ export default async function VentesPage({ searchParams }: PageProps) {
   }
 
   const where = {
-    ...(statut         && { statut }),
+    ...(statut && { statut }),
     ...(statutPaiement && { statutPaiement }),
-    ...(dateFilter     && { createdAt: dateFilter }),
+    ...(dateFilter && { createdAt: dateFilter }),
     ...(search && {
       OR: [
         { numero: { contains: search, mode: "insensitive" as const } },
@@ -92,41 +92,41 @@ export default async function VentesPage({ searchParams }: PageProps) {
   const [ventes, totalVentes, reglementsCredit, statsAujourdhui] = await Promise.all([
     shouldFetchVentes
       ? prisma.vente.findMany({
-          where,
-          include: {
-            client: { select: { nom: true, prenom: true } },
-            vendeur: { select: { nom: true, prenom: true } },
-            lignes: { select: { id: true } },
-          },
-          orderBy: { createdAt: "desc" },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        })
+        where,
+        include: {
+          client: { select: { nom: true, prenom: true } },
+          vendeur: { select: { nom: true, prenom: true } },
+          lignes: { select: { id: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      })
       : Promise.resolve([]),
     shouldFetchVentes ? prisma.vente.count({ where }) : Promise.resolve(0),
     shouldFetchReglements
       ? prisma.ecritureFinanciere.findMany({
-          where: {
-            type: "RECETTE_VENTE",
-            description: { startsWith: "Règlement crédit" },
-            ...(dateFilter ? { date: dateFilter } : {}),
-            ...(search ? {
-              OR: [
-                { description: { contains: search, mode: "insensitive" as const } },
-                { vente: { client: { nom: { contains: search, mode: "insensitive" as const } } } },
-              ],
-            } : {}),
-          },
-          include: {
-            vente: {
-              include: {
-                client: { select: { nom: true, prenom: true } },
-              },
+        where: {
+          type: "RECETTE_VENTE",
+          description: { startsWith: "Règlement crédit" },
+          ...(dateFilter ? { date: dateFilter } : {}),
+          ...(search ? {
+            OR: [
+              { description: { contains: search, mode: "insensitive" as const } },
+              { vente: { client: { nom: { contains: search, mode: "insensitive" as const } } } },
+            ],
+          } : {}),
+        },
+        include: {
+          vente: {
+            include: {
+              client: { select: { nom: true, prenom: true } },
             },
           },
-          orderBy: { date: "desc" },
-          take: pageSize,
-        })
+        },
+        orderBy: { date: "desc" },
+        take: pageSize,
+      })
       : Promise.resolve([]),
     // Stats du jour
     prisma.vente.aggregate({
@@ -157,13 +157,13 @@ export default async function VentesPage({ searchParams }: PageProps) {
   const lienPage = (p: number) => {
     const params = new URLSearchParams();
     params.set("page", String(p));
-    if (statut)         params.set("statut", statut);
+    if (statut) params.set("statut", statut);
     if (statutPaiement) params.set("statutPaiement", statutPaiement);
-    if (typeFlux)       params.set("typeFlux", typeFlux);
-    if (search)         params.set("search", search);
-    if (dateDebut)      params.set("dateDebut", dateDebut);
-    if (dateFin)        params.set("dateFin", dateFin);
-    if (heure)          params.set("heure", heure);
+    if (typeFlux) params.set("typeFlux", typeFlux);
+    if (search) params.set("search", search);
+    if (dateDebut) params.set("dateDebut", dateDebut);
+    if (dateFin) params.set("dateFin", dateFin);
+    if (heure) params.set("heure", heure);
     return `?${params.toString()}`;
   };
 
@@ -310,6 +310,7 @@ export default async function VentesPage({ searchParams }: PageProps) {
                             </span>
                             <span className="text-primary font-semibold">{vNum}</span>
                           </div>
+
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
                           {formatDateTime(reg.date)}
