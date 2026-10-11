@@ -426,6 +426,10 @@ export default async function VenteDetailPage({ params }: Params) {
         venteId={vente.id}
         statut={vente.statut}
         role={role}
+        numero={vente.numero}
+        total={vente.total}
+        montantPaye={vente.montantPaye ?? 0}
+        modePaiement={vente.modePaiement}
       />
 
       {/* ── Historique ── */}

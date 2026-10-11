@@ -42,6 +42,8 @@ export const updateVenteSchema = z.object({
       modePaiement: z.enum(["ESPECES", "CARTE", "VIREMENT", "CHEQUE", "MIXTE"]).optional(),
     })
     .optional(),
+  // Option lors de l'annulation d'une vente ayant un acompte : true = rembourser, false = conserver
+  rembourserAcompte: z.boolean().optional(),
 });
 
 export type CreateVenteInput = z.infer<typeof createVenteSchema>;

@@ -270,7 +270,7 @@ export async function PATCH(
     );
   }
 
-  const { statut, notes, statutPaiement, modePaiementReel, reglementCredit } = parsed.data;
+  const { statut, notes, statutPaiement, modePaiementReel, reglementCredit, rembourserAcompte } = parsed.data;
 
   // Cas spécial : règlement (paiement) d'une vente à CRÉDIT par le client.
   // Chaque paiement entre dans le CA au moment où il est encaissé (RECETTE_VENTE).
@@ -416,16 +416,54 @@ export async function PATCH(
           }
         }
 
-        // Écriture financière de correction (contrepasse la recette de la vente)
-        await tx.ecritureFinanciere.create({
-          data: {
-            venteId: vente.id,
-            type: "REMBOURSEMENT",
-            montant: -vente.total,
-            description: `Annulation ${vente.numero}`,
-            metadata: { operateur: session.user.id, motif: notes },
-          },
-        });
+        // Écriture financière de correction
+        // On vérifie le montant total réellement encaissé pour cette vente (recettes - remboursements antérieurs)
+        const ecritures = await tx.ecritureFinanciere.findMany({ where: { venteId: vente.id } });
+        const totalRecettes = ecritures
+          .filter((e) => e.type === "RECETTE_VENTE")
+          .reduce((s, e) => s + e.montant, 0);
+        const totalRemboursements = ecritures
+          .filter((e) => e.type === "REMBOURSEMENT")
+          .reduce((s, e) => s + Math.abs(e.montant), 0);
+        const totalEncaisseNet = Math.max(0, totalRecettes - totalRemboursements);
+
+        // Option 2 : Si de l'argent a été encaissé, vérifier si on rembourse ou conserve l'acompte
+        const doitRembourser = rembourserAcompte !== false;
+
+        if (totalEncaisseNet > 0 && doitRembourser) {
+          const description =
+            totalEncaisseNet < vente.total
+              ? `Annulation ${vente.numero} (remboursement acompte perçu)`
+              : `Annulation ${vente.numero}`;
+
+          await tx.ecritureFinanciere.create({
+            data: {
+              venteId: vente.id,
+              type: "REMBOURSEMENT",
+              montant: -totalEncaisseNet,
+              description,
+              metadata: {
+                operateur: session.user.id,
+                motif: notes,
+                totalFacture: vente.total,
+                montantRembourse: totalEncaisseNet,
+                rembourserAcompte: true,
+              },
+            },
+          });
+        } else if (totalEncaisseNet > 0 && !doitRembourser) {
+          // L'acompte est conservé par l'entreprise : aucune sortie financière / aucun débit du CA
+          await tx.note.create({
+            data: {
+              contenu: `Vente ${vente.numero} annulée : acompte de ${totalEncaisseNet} XAF conservé par l'entreprise (non restitué au client).`,
+              entityId: vente.id,
+              entityType: "vente",
+              userId: session.user.id,
+            },
+          });
+        }
+        // Si totalEncaisseNet === 0 (vente à crédit 100% impayée), aucune écriture financière de remboursement n'est créée !
+        // Le CA n'est pas débité d'un seul centime.
 
         // Mise à jour du total client
         if (vente.clientId) {
@@ -446,7 +484,7 @@ export async function PATCH(
       action: AUDIT_ACTIONS.VENTE_ANNULEE,
       entityId: vente.id,
       entityType: "vente",
-      details: { numero: vente.numero, statut, notes },
+      details: { numero: vente.numero, statut, notes, rembourserAcompte },
     });
 
     logger.info({ venteId: vente.id, statut }, "Statut vente modifié");

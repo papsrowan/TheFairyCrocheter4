@@ -61,14 +61,36 @@ export async function PATCH(
         });
       }
 
-      await tx.ecritureFinanciere.create({
-        data: {
-          venteId: demande.venteId, type: "REMBOURSEMENT",
-          montant: -demande.vente.total,
-          description: `Annulation vente ${demande.vente.numero}`,
-          metadata: { operateur: session.user.id, demandeId: demande.id },
-        },
-      });
+      // Calculer l'encaissement net réel pour ne pas débiter le CA de montants non perçus
+      const ecritures = await tx.ecritureFinanciere.findMany({ where: { venteId: demande.venteId } });
+      const totalRecettes = ecritures
+        .filter((e) => e.type === "RECETTE_VENTE")
+        .reduce((s, e) => s + e.montant, 0);
+      const totalRemboursements = ecritures
+        .filter((e) => e.type === "REMBOURSEMENT")
+        .reduce((s, e) => s + Math.abs(e.montant), 0);
+      const totalEncaisseNet = Math.max(0, totalRecettes - totalRemboursements);
+
+      // Ne rembourser que si de l'argent a été effectivement perçu
+      if (totalEncaisseNet > 0) {
+        await tx.ecritureFinanciere.create({
+          data: {
+            venteId: demande.venteId,
+            type: "REMBOURSEMENT",
+            montant: -totalEncaisseNet,
+            description:
+              totalEncaisseNet < demande.vente.total
+                ? `Annulation vente ${demande.vente.numero} (remboursement acompte perçu)`
+                : `Annulation vente ${demande.vente.numero}`,
+            metadata: {
+              operateur: session.user.id,
+              demandeId: demande.id,
+              totalFacture: demande.vente.total,
+              montantRembourse: totalEncaisseNet,
+            },
+          },
+        });
+      }
 
       // Corriger le total achats du client
       if (demande.vente.clientId) {
