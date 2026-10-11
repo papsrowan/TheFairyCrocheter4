@@ -69,35 +69,56 @@ export async function POST(req: NextRequest) {
       try {
         const venteData = venteParsed.data;
 
-        // Calculer les totaux
-        let sousTotal = 0;
-        let montantTVA = 0;
-
         const venteCreee = await prisma.$transaction(async (tx) => {
-          // Vérifier disponibilité stock
+          let sousTotal = 0;
+          let montantTVA = 0;
+
+          // 1. Vérification et récupération des produits et variantes
+          const produitsMap = new Map<string, { stockActuel: number; nom: string }>();
+          const variantesMap = new Map<string, { stockActuel: number; couleur: string }>();
+
           for (const ligne of venteData.lignes) {
             const produit = await tx.produit.findUnique({
               where: { id: ligne.produitId },
-              select: { stockActuel: true, nom: true },
+              select: { id: true, stockActuel: true, nom: true, actif: true },
             });
 
-            if (!produit || produit.stockActuel < ligne.quantite) {
+            if (!produit || !produit.actif) {
+              throw new Error(`Produit introuvable : ${ligne.produitId}`);
+            }
+
+            if (ligne.varianteId) {
+              const variante = await tx.varianteProduit.findUnique({
+                where: { id: ligne.varianteId },
+                select: { id: true, stockActuel: true, couleur: true },
+              });
+              if (!variante) throw new Error(`Variante introuvable : ${ligne.varianteId}`);
+              if (variante.stockActuel < ligne.quantite) {
+                throw new Error(
+                  `Stock insuffisant pour "${produit.nom}" couleur "${variante.couleur}" (disponible : ${variante.stockActuel}, demandé : ${ligne.quantite})`
+                );
+              }
+              variantesMap.set(ligne.varianteId, variante);
+            } else if (produit.stockActuel < ligne.quantite) {
               throw new Error(
-                `Stock insuffisant pour le produit ${produit?.nom ?? ligne.produitId}`
+                `Stock insuffisant pour "${produit.nom}" (disponible : ${produit.stockActuel}, demandé : ${ligne.quantite})`
               );
             }
 
-            const ligneTotal = ligne.prixUnitaire * ligne.quantite * (1 - ligne.remise / 100);
-            const ligneHT = ligneTotal / (1 + ligne.tauxTVA / 100);
-            sousTotal += ligneTotal;
-            montantTVA += ligneHT * (ligne.tauxTVA / 100);
+            produitsMap.set(ligne.produitId, produit);
+
+            const ligneTTC = Math.max(0, ligne.prixUnitaire * ligne.quantite - ligne.remise);
+            const ligneHT = ligneTTC / (1 + ligne.tauxTVA / 100);
+            sousTotal += Math.round(ligneTTC * 100) / 100;
+            montantTVA += Math.round((ligneTTC - ligneHT) * 100) / 100;
           }
 
-          const totalApresRemise = sousTotal * (1 - venteData.remiseGlobale / 100);
+          const totalCalcule = Math.max(0, sousTotal - venteData.remiseGlobale);
+          const total = venteData.prixSpecial ?? totalCalcule;
 
-          // Générer numéro de vente
+          // 2. Génération du numéro de vente
           const lastVente = await tx.vente.findFirst({
-            orderBy: { createdAt: "desc" },
+            orderBy: { numero: "desc" },
             select: { numero: true },
           });
           const lastNum = lastVente
@@ -105,50 +126,142 @@ export async function POST(req: NextRequest) {
             : 0;
           const numero = generateNumeroVente(lastNum);
 
-          // Créer la vente
+          const estCredit = venteData.modePaiement === "CREDIT";
+          const montantPaye = venteData.montantPaye ?? null;
+          const estPartiel = montantPaye !== null && montantPaye < total;
+          const dateVente = venteData.dateFacture
+            ? new Date(venteData.dateFacture)
+            : new Date(action.createdAt);
+
+          // 3. Créer la vente
           const vente = await tx.vente.create({
             data: {
               numero,
-              clientId: venteData.clientId,
+              clientId: venteData.clientId ?? null,
               userId: session.user.id,
               sousTotal,
               montantTVA,
               remiseGlobale: venteData.remiseGlobale,
-              total: totalApresRemise,
+              total,
               modePaiement: venteData.modePaiement,
+              statutPaiement: (estCredit || estPartiel) ? "EN_ATTENTE" : "PAYE",
+              montantPaye,
+              dateFacture: venteData.dateFacture ? new Date(venteData.dateFacture) : null,
+              dateEcheance: venteData.dateEcheance ? new Date(venteData.dateEcheance) : null,
               notes: venteData.notes,
               offlineId: action.id,
               synchedAt: new Date(),
-              createdAt: new Date(action.createdAt),
+              createdAt: dateVente,
               lignes: {
                 create: venteData.lignes.map((l) => ({
                   produitId: l.produitId,
+                  varianteId: l.varianteId ?? null,
                   quantite: l.quantite,
                   prixUnitaire: l.prixUnitaire,
                   remise: l.remise,
                   tauxTVA: l.tauxTVA,
-                  total: l.prixUnitaire * l.quantite * (1 - l.remise / 100),
+                  total: Math.max(0, l.prixUnitaire * l.quantite - l.remise),
                 })),
               },
             },
           });
 
-          // Décrémenter le stock
+          // 4. Décrémenter le stock
           for (const ligne of venteData.lignes) {
-            const produit = await tx.produit.update({
+            const produitAvant = produitsMap.get(ligne.produitId)!;
+            const produitApres = await tx.produit.update({
               where: { id: ligne.produitId },
               data: { stockActuel: { decrement: ligne.quantite } },
             });
+
+            if (ligne.varianteId) {
+              const varAvant = variantesMap.get(ligne.varianteId)!;
+              const varApres = await tx.varianteProduit.update({
+                where: { id: ligne.varianteId },
+                data: { stockActuel: { decrement: ligne.quantite } },
+              });
+              await tx.mouvementStock.create({
+                data: {
+                  produitId: ligne.produitId,
+                  varianteId: ligne.varianteId,
+                  type: "SORTIE_VENTE",
+                  quantite: ligne.quantite,
+                  stockAvant: varAvant.stockActuel,
+                  stockApres: varApres.stockActuel,
+                  venteId: vente.id,
+                  userId: session.user.id,
+                  motif: `Vente offline ${numero} — couleur ${varApres.couleur}`,
+                },
+              });
+            }
 
             await tx.mouvementStock.create({
               data: {
                 produitId: ligne.produitId,
                 type: "SORTIE_VENTE",
                 quantite: ligne.quantite,
-                stockAvant: produit.stockActuel + ligne.quantite,
-                stockApres: produit.stockActuel,
+                stockAvant: produitAvant.stockActuel,
+                stockApres: produitApres.stockActuel,
                 venteId: vente.id,
                 userId: session.user.id,
+                motif: `Vente offline ${numero}`,
+              },
+            });
+
+            const produit = await tx.produit.findUnique({
+              where: { id: ligne.produitId },
+              select: { stockActuel: true, stockMinimum: true, nom: true },
+            });
+            if (produit && produit.stockActuel <= produit.stockMinimum) {
+              emitSSE("stock.alert", {
+                produitId: ligne.produitId,
+                nom: produit.nom,
+                stockActuel: produit.stockActuel,
+                stockMinimum: produit.stockMinimum,
+              });
+            }
+          }
+
+          // 5. Création automatique de l'écriture financière RECETTE_VENTE
+          if (!estCredit) {
+            await tx.ecritureFinanciere.create({
+              data: {
+                venteId: vente.id,
+                type: "RECETTE_VENTE",
+                montant: total,
+                description: `Vente ${numero}`,
+                date: dateVente,
+                metadata: {
+                  modePaiement: venteData.modePaiement,
+                  caissier: session.user.id,
+                  offlineId: action.id,
+                },
+              },
+            });
+          } else if (montantPaye && montantPaye > 0) {
+            await tx.ecritureFinanciere.create({
+              data: {
+                venteId: vente.id,
+                type: "RECETTE_VENTE",
+                montant: montantPaye,
+                description: `Acompte vente crédit ${numero}`,
+                date: dateVente,
+                metadata: {
+                  modePaiement: venteData.modePaiement,
+                  caissier: session.user.id,
+                  offlineId: action.id,
+                },
+              },
+            });
+          }
+
+          // 6. Mise à jour du total d'achats du client
+          if (venteData.clientId) {
+            await tx.client.update({
+              where: { id: venteData.clientId },
+              data: {
+                totalAchats: { increment: total },
+                dernierAchat: dateVente,
               },
             });
           }
