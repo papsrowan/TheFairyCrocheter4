@@ -147,6 +147,65 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
     );
   }
 
+  void _showManualBarcodeDialog() {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.barcode_reader, color: AppTheme.primaryColor),
+            SizedBox(width: 8),
+            Text('Scanner Matériel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pour scanner automatiquement :\n• Visez le code-barres ou QR code\n• Appuyez sur le bouton physique du terminal.\n\nOu saisissez le code manuellement ci-dessous :',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.text,
+              decoration: const InputDecoration(
+                labelText: 'Code-barres du produit',
+                prefixIcon: Icon(Icons.qr_code),
+              ),
+              onSubmitted: (code) {
+                if (code.trim().isNotEmpty) {
+                  Navigator.pop(ctx);
+                  _handleBarcode(code.trim());
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fermer'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 40)),
+            onPressed: () {
+              final code = ctrl.text.trim();
+              if (code.isNotEmpty) {
+                Navigator.pop(ctx);
+                _handleBarcode(code);
+              }
+            },
+            child: const Text('Valider'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openCheckoutDialog() {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
@@ -356,16 +415,23 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
               ),
               const SizedBox(width: 8),
               Tooltip(
-                message: 'Scanner matériel prêt. Appuyez sur la touche scan physique.',
-                child: Container(
-                  height: 48,
-                  width: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.secondaryLight,
+                message: 'Scanner matériel prêt. Touche physique du terminal ou appuyez pour saisir.',
+                child: Material(
+                  color: AppTheme.secondaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.secondaryColor.withValues(alpha: 0.3)),
+                    onTap: _showManualBarcodeDialog,
+                    child: Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.secondaryColor.withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(Icons.barcode_reader, color: AppTheme.secondaryColor),
+                    ),
                   ),
-                  child: const Icon(Icons.barcode_reader, color: AppTheme.secondaryColor),
                 ),
               ),
             ],
