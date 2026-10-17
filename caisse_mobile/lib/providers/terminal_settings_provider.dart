@@ -9,6 +9,7 @@ class TerminalSettingsProvider extends ChangeNotifier {
 
   late String _baseUrl;
   late bool _autoPrint;
+  late bool _autoOpenDrawer;
   late String _printerMode;
   late String _scannerMode;
   late String _customIntentAction;
@@ -17,6 +18,7 @@ class TerminalSettingsProvider extends ChangeNotifier {
 
   String get baseUrl => _baseUrl;
   bool get autoPrint => _autoPrint;
+  bool get autoOpenDrawer => _autoOpenDrawer;
   String get printerMode => _printerMode;
   String get scannerMode => _scannerMode;
   String get customIntentAction => _customIntentAction;
@@ -33,6 +35,7 @@ class TerminalSettingsProvider extends ChangeNotifier {
   void _loadSettings() {
     _baseUrl = storageService.getBaseUrl();
     _autoPrint = storageService.getAutoPrint();
+    _autoOpenDrawer = storageService.getAutoOpenDrawer();
     _printerMode = storageService.getPrinterMode();
     _scannerMode = storageService.getScannerMode();
     _customIntentAction = storageService.getCustomIntentAction();
@@ -53,6 +56,12 @@ class TerminalSettingsProvider extends ChangeNotifier {
   Future<void> setAutoPrint(bool val) async {
     _autoPrint = val;
     await storageService.setAutoPrint(val);
+    notifyListeners();
+  }
+
+  Future<void> setAutoOpenDrawer(bool val) async {
+    _autoOpenDrawer = val;
+    await storageService.setAutoOpenDrawer(val);
     notifyListeners();
   }
 

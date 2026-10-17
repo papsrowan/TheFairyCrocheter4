@@ -12,6 +12,7 @@ class StorageService {
   static const String keyScannerMode = 'pos_scanner_mode'; // 'wedge' | 'broadcast' | 'camera'
   static const String keyCustomIntentAction = 'pos_custom_intent_action';
   static const String keyOfflineQueue = 'pos_offline_sales_queue';
+  static const String keyAutoOpenDrawer = 'pos_auto_open_drawer';
 
   late SharedPreferences _prefs;
 
@@ -63,6 +64,9 @@ class StorageService {
   // Options du terminal
   bool getAutoPrint() => _prefs.getBool(keyAutoPrint) ?? true;
   Future<void> setAutoPrint(bool val) => _prefs.setBool(keyAutoPrint, val);
+
+  bool getAutoOpenDrawer() => _prefs.getBool(keyAutoOpenDrawer) ?? true;
+  Future<void> setAutoOpenDrawer(bool val) => _prefs.setBool(keyAutoOpenDrawer, val);
 
   String getPrinterMode() => _prefs.getString(keyPrinterMode) ?? 'android_spooler';
   Future<void> setPrinterMode(String mode) => _prefs.setString(keyPrinterMode, mode);

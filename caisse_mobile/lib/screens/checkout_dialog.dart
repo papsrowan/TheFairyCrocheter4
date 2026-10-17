@@ -8,6 +8,7 @@ import '../providers/terminal_settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
+import '../services/cash_drawer_service.dart';
 import '../widgets/quick_cash_pad.dart';
 import 'client_search_modal.dart';
 import 'sale_success_screen.dart';
@@ -609,15 +610,40 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   // ─── SÉLECTEUR DE MODE DE PAIEMENT ───────────────────────────
                   // Visible si vente comptant ou si acompte versé
                   if (!cart.payerPlusTard || (cart.payerPlusTard && cart.paiementPartiel)) ...[
-                    Text(
-                      cart.payerPlusTard
-                          ? "Mode de paiement de l'acompte :"
-                          : 'Mode de règlement :',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textSecondary,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          cart.payerPlusTard
+                              ? "Mode de paiement de l'acompte :"
+                              : 'Mode de règlement :',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                          ),
+                          onPressed: () async {
+                            final ok = await CashDrawerService.openDrawer();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(ok ? 'Tiroir-caisse ouvert !' : 'Commande tiroir envoyée.'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.point_of_sale, size: 15, color: AppTheme.primaryColor),
+                          label: const Text('Ouvrir tiroir', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
 
@@ -709,6 +735,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         montantRecu: cart.modePaiement == 'ESPECES' ? cart.montantRecu : null,
                         monnaieRendue: cart.modePaiement == 'ESPECES' ? cart.monnaieRendue : null,
                       );
+
+                      // Déclencher l'ouverture automatique du tiroir-caisse RJ12 si paiement espèces
+                      if (settings.autoOpenDrawer &&
+                          (cart.modePaiement == 'ESPECES' || (cart.payerPlusTard && cart.paiementPartiel))) {
+                        CashDrawerService.openDrawer();
+                      }
 
                       final saleRes = await cart.submitSale(
                         apiService: apiService,

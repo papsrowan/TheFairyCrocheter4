@@ -13,6 +13,7 @@ import '../providers/sales_history_provider.dart';
 import '../providers/terminal_settings_provider.dart';
 import '../services/scanner_service.dart';
 import '../services/printer_service.dart';
+import '../services/cash_drawer_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/universal_scanner_listener.dart';
 import '../widgets/product_card.dart';
@@ -335,6 +336,31 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                 ),
                 maxLines: 1,
               ),
+            ),
+
+            // Bouton Tiroir-Caisse rapide (RJ12)
+            IconButton(
+              tooltip: 'Ouvrir tiroir-caisse (RJ12)',
+              icon: const Icon(Icons.point_of_sale_outlined),
+              onPressed: () async {
+                final ok = await CashDrawerService.openDrawer();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(ok ? Icons.check_circle : Icons.info_outline, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Text(ok ? 'Tiroir-caisse ouvert !' : 'Commande d\'ouverture envoyée.'),
+                        ],
+                      ),
+                      backgroundColor: AppTheme.secondaryColor,
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
             ),
 
             // Paramètres

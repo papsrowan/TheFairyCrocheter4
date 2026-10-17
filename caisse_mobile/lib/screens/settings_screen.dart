@@ -7,6 +7,8 @@ import '../services/api_service.dart';
 import '../services/printer_service.dart';
 import '../services/feedback_service.dart';
 
+import '../services/cash_drawer_service.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -125,6 +127,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.print),
                     label: const Text('Imprimer un ticket de test'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // Section Tiroir-Caisse (RJ12)
+          _buildSectionHeader('Tiroir-Caisse (Câble RJ12)'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile(
+                    title: const Text('Ouverture auto (Espèces)', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: const Text('Ouvrir le tiroir automatiquement lors de la validation d\'un règlement en espèces'),
+                    value: settings.autoOpenDrawer,
+                    activeThumbColor: AppTheme.primaryColor,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) => settings.setAutoOpenDrawer(val),
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await CashDrawerService.openDrawer();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                Icon(ok ? Icons.check_circle : Icons.info_outline, color: Colors.white, size: 20),
+                                const SizedBox(width: 8),
+                                Text(ok ? 'Signal d\'ouverture RJ12 envoyé !' : 'Commande d\'ouverture envoyée.'),
+                              ],
+                            ),
+                            backgroundColor: AppTheme.secondaryColor,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.point_of_sale),
+                    label: const Text('Tester l\'ouverture du tiroir-caisse (RJ12)'),
                   ),
                 ],
               ),

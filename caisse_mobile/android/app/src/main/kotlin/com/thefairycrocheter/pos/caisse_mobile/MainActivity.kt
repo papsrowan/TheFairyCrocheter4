@@ -47,6 +47,10 @@ class MainActivity : FlutterActivity() {
                 "getRegisteredActions" -> {
                     result.success(registeredActions.toList())
                 }
+                "openCashDrawer" -> {
+                    val opened = openPhysicalCashDrawer()
+                    result.success(opened)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -146,6 +150,54 @@ class MainActivity : FlutterActivity() {
         }
 
         return null
+    }
+
+    private fun openPhysicalCashDrawer(): Boolean {
+        var success = false
+
+        // 1. Broadcasts Android standards pour tiroir-caisse RJ12 / POS
+        val drawerActions = listOf(
+            "android.intent.action.CASH_DRAWER",
+            "com.pos.drawer.open",
+            "com.sunmi.action.CASH_DRAWER_OPEN",
+            "action.open.cashbox",
+            "com.imin.action.OPEN_DRAWER",
+            "com.urovo.cashdrawer.OPEN",
+            "device.action.OPEN_DRAWER",
+            "com.android.cashdrawer.open",
+            "android.intent.action.OPEN_DRAWER"
+        )
+        for (action in drawerActions) {
+            try {
+                sendBroadcast(Intent(action))
+                success = true
+            } catch (_: Exception) {}
+        }
+
+        // 2. Écriture directe des octets ESC/POS (ESC p 0 25 250) sur les nœuds de périphériques tiroir / port série
+        val candidateDevices = listOf(
+            "/dev/cash_drawer",
+            "/dev/cashbox",
+            "/dev/drawer",
+            "/dev/ttyMT1",
+            "/dev/ttyMT2",
+            "/dev/ttyS1"
+        )
+        val kickBytes = byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte())
+        for (devPath in candidateDevices) {
+            try {
+                val file = java.io.File(devPath)
+                if (file.exists() && file.canWrite()) {
+                    val fos = java.io.FileOutputStream(file)
+                    fos.write(kickBytes)
+                    fos.flush()
+                    fos.close()
+                    success = true
+                }
+            } catch (_: Exception) {}
+        }
+
+        return success
     }
 
     override fun onDestroy() {
