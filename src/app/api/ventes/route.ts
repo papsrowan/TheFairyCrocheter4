@@ -64,7 +64,8 @@ export async function GET(req: NextRequest) {
         vendeur: { select: { id: true, nom: true, prenom: true } },
         lignes: {
           include: {
-            produit: { select: { id: true, nom: true } },
+            produit: { select: { id: true, nom: true, imageUrl: true } },
+            variante: { select: { id: true, couleur: true, description: true } },
           },
         },
       },

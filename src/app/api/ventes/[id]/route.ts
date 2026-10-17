@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth-mobile";
 import { prisma } from "@/lib/db";
 import { updateVenteSchema } from "@/lib/validations/vente.schema";
 import { hasPermission } from "@/lib/security/rbac";
@@ -17,10 +18,10 @@ export const dynamic = "force-dynamic";
 // ─── GET — Détail d'une vente ─────────────────────────────────────────────────
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth();
+  const session = await getAuthenticatedUser(req);
   if (!session?.user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
@@ -37,6 +38,9 @@ export async function GET(
         include: {
           produit: {
             select: { id: true, nom: true, codeBarres: true, imageUrl: true },
+          },
+          variante: {
+            select: { id: true, couleur: true, description: true },
           },
         },
       },

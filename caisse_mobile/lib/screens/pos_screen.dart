@@ -1,13 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
 import '../models/product.dart';
+import '../models/sale.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/catalog_provider.dart';
+import '../providers/sales_history_provider.dart';
+import '../providers/terminal_settings_provider.dart';
 import '../services/scanner_service.dart';
+import '../services/printer_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/universal_scanner_listener.dart';
 import '../widgets/product_card.dart';
@@ -15,6 +20,7 @@ import '../widgets/cart_tile.dart';
 import 'variant_selection_dialog.dart';
 import 'client_search_modal.dart';
 import 'checkout_dialog.dart';
+import 'sale_detail_modal.dart';
 import 'settings_screen.dart';
 
 class PosScreen extends StatefulWidget {
@@ -27,16 +33,18 @@ class PosScreen extends StatefulWidget {
 class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _salesSearchCtrl = TextEditingController();
   StreamSubscription<String>? _scanSubscription;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
 
-    // Charger le catalogue au démarrage
+    // Charger le catalogue et l'historique des ventes au démarrage
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CatalogProvider>().loadCatalog();
+      context.read<SalesHistoryProvider>().loadSales();
     });
 
     // Écouter les événements du scanner Broadcast Intent natif
@@ -50,6 +58,7 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
   void dispose() {
     _tabController.dispose();
     _searchCtrl.dispose();
+    _salesSearchCtrl.dispose();
     _scanSubscription?.cancel();
     super.dispose();
   }
@@ -218,7 +227,52 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
       builder: (_) => CheckoutDialog(
         caissierNom: auth.user?.nomComplet ?? 'Caissier',
       ),
+    ).then((_) {
+      if (mounted) {
+        // Rafraîchir l'historique des ventes après encaissement
+        context.read<SalesHistoryProvider>().loadSales(force: true);
+      }
+    });
+  }
+
+  void _openSaleDetailModal(VenteItem sale) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SaleDetailModal(sale: sale),
     );
+  }
+
+  Future<void> _printQuickReceipt(VenteItem sale, AuthProvider auth, TerminalSettingsProvider settings) async {
+    final receiptData = sale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
+    try {
+      final ok = await PrinterService.printReceiptNative(receiptData);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(ok ? Icons.check_circle : Icons.warning_amber, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text(ok ? 'Reçu ${sale.numero} imprimé avec succès !' : 'Erreur impression thermique'),
+              ],
+            ),
+            backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -234,17 +288,32 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
           titleSpacing: 12,
           title: Row(
             children: [
-              const Icon(Icons.storefront, color: AppTheme.primaryColor),
+              Image.asset(
+                'assets/icon/app_icon.png',
+                width: 28,
+                height: 28,
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.shopping_bag,
+                  color: AppTheme.primaryColor,
+                  size: 24,
+                ),
+              ),
               const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Caisse POS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                  Text(
-                    auth.user?.nomComplet ?? 'The Fairy Crocheter',
-                    style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'The Fairy Crocheter',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      auth.user != null ? '${auth.user!.nomComplet} (Caisse)' : 'Caisse',
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -293,9 +362,9 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.grid_view, size: 18),
-                        SizedBox(width: 6),
-                        Text('Catalogue / Scan', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Icon(Icons.grid_view, size: 16),
+                        SizedBox(width: 4),
+                        Text('Catalogue', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -303,23 +372,19 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.shopping_bag_outlined, size: 18),
-                        const SizedBox(width: 6),
-                        Text('Panier (${cart.totalArticles})', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        if (cart.items.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              AppConstants.formatCurrency(cart.total),
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
+                        const Icon(Icons.shopping_bag_outlined, size: 16),
+                        const SizedBox(width: 4),
+                        Text('Panier (${cart.totalArticles})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.receipt_long, size: 16),
+                        SizedBox(width: 4),
+                        Text('Ventes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -336,61 +401,22 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
 
             // ONGLET 2 : PANIER & TOTAL
             _buildCartTab(cart),
+
+            // ONGLET 3 : HISTORIQUE DES VENTES & RÉIMPRESSION
+            _buildSalesTab(),
           ],
         ),
-        bottomNavigationBar: _tabController.index == 0 && cart.items.isNotEmpty
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${cart.totalArticles} article${cart.totalArticles > 1 ? 's' : ''}',
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                          ),
-                          Text(
-                            AppConstants.formatCurrency(cart.total),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.primaryColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.secondaryColor,
-                        minimumSize: const Size(160, 48),
-                      ),
-                      onPressed: () {
-                        _tabController.animateTo(1);
-                      },
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Voir le panier'),
-                    ),
-                  ],
-                ),
-              )
-            : null,
       ),
     );
   }
 
-  // ─── ONGLET CATALOGUE ────────────────────────────────────────────────────────
+  // ─── ONGLET CATALOGUE & SCAN ────────────────────────────────────────────────
   Widget _buildCatalogTab(CatalogProvider catalog) {
     return Column(
       children: [
-        // Barre de recherche et bouton caméra
+        // Barre de recherche et statut scanner
         Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: Row(
             children: [
               Expanded(
@@ -534,19 +560,19 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildCategoryPill(String label, bool isSelected, VoidCallback onTap) {
+  Widget _buildCategoryPill(String title, bool isSelected, VoidCallback onTap) {
     return Padding(
-      padding: const EdgeInsets.only(right: 6.0),
-      child: FilterChip(
-        selected: isSelected,
-        label: Text(label),
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(title),
         labelStyle: TextStyle(
           fontSize: 12,
-          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           color: isSelected ? Colors.white : AppTheme.textPrimary,
         ),
-        backgroundColor: Colors.white,
+        selected: isSelected,
         selectedColor: AppTheme.primaryColor,
+        backgroundColor: Colors.white,
         side: BorderSide(color: isSelected ? AppTheme.primaryColor : AppTheme.borderColor),
         onSelected: (_) => onTap(),
       ),
@@ -702,6 +728,338 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
           ),
         ),
       ],
+    );
+  }
+
+  // ─── ONGLET 3 : HISTORIQUE DES VENTES & RÉIMPRESSION ─────────────────────────
+  Widget _buildSalesTab() {
+    final salesProvider = context.watch<SalesHistoryProvider>();
+    final auth = context.watch<AuthProvider>();
+    final settings = context.watch<TerminalSettingsProvider>();
+
+    return Column(
+      children: [
+        // Barre de recherche des ventes
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _salesSearchCtrl,
+                  onChanged: (q) => salesProvider.setSearchQuery(q),
+                  onSubmitted: (q) => salesProvider.searchOnServer(q),
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher N° vente, client, mode...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _salesSearchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _salesSearchCtrl.clear();
+                              salesProvider.setSearchQuery('');
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                icon: const Icon(Icons.refresh, size: 20),
+                tooltip: 'Actualiser les ventes',
+                onPressed: () => salesProvider.loadSales(force: true),
+              ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        // Liste des ventes avec pull-to-refresh
+        Expanded(
+          child: salesProvider.isLoading && salesProvider.sales.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : salesProvider.errorMessage != null && salesProvider.sales.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.cloud_off, size: 48, color: AppTheme.errorColor),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Erreur lors du chargement des ventes',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const SizedBox(height: 6),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              salesProvider.errorMessage!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: () => salesProvider.loadSales(force: true),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Réessayer'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : salesProvider.filteredSales.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.receipt_long_outlined, size: 54, color: AppTheme.textSecondary),
+                              const SizedBox(height: 12),
+                              const Text('Aucune vente trouvée', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 6),
+                              const Text('Les ventes enregistrées apparaîtront ici.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed: () => salesProvider.loadSales(force: true),
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Actualiser'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () => salesProvider.loadSales(force: true),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: salesProvider.filteredSales.length,
+                            itemBuilder: (context, index) {
+                              final sale = salesProvider.filteredSales[index];
+                              return _buildSaleCard(sale, auth, settings);
+                            },
+                          ),
+                        ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSaleCard(VenteItem sale, AuthProvider auth, TerminalSettingsProvider settings) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppTheme.borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Ligne 1 : Numéro de vente, Date et Statut
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.receipt, size: 16, color: AppTheme.primaryColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      sale.numero,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                _buildSaleStatusChip(sale),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            // Ligne 2 : Date & Heure
+            Text(
+              DateFormat('dd/MM/yyyy à HH:mm').format(sale.dateFacture ?? sale.createdAt),
+              style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+            ),
+
+            const SizedBox(height: 6),
+            const Divider(height: 1, color: AppTheme.borderColor),
+            const SizedBox(height: 8),
+
+            // Ligne 3 : Client & Mode de paiement
+            Row(
+              children: [
+                Icon(
+                  sale.clientNom != null ? Icons.person : Icons.person_outline,
+                  size: 14,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    sale.clientNom ?? 'Client de passage',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                _buildPaymentModeChip(sale.modePaiement),
+              ],
+            ),
+
+            const SizedBox(height: 6),
+
+            // Ligne 4 : Articles & Total
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${sale.lignes.length} article${sale.lignes.length > 1 ? 's' : ''}',
+                      style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                    ),
+                    if (sale.isCredit && sale.resteDu > 0)
+                      Text(
+                        'Reste dû : ${AppConstants.formatCurrency(sale.resteDu)}',
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFB91C1C)),
+                      ),
+                  ],
+                ),
+                Text(
+                  AppConstants.formatCurrency(sale.total),
+                  style: const TextStyle(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.primaryDark,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // Ligne 5 : Boutons Détails et Impression
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _openSaleDetailModal(sale),
+                    icon: const Icon(Icons.visibility_outlined, size: 16),
+                    label: const Text('Détails', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _printQuickReceipt(sale, auth, settings),
+                    icon: const Icon(Icons.print, size: 16),
+                    label: const Text('Imprimer reçu', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaleStatusChip(VenteItem sale) {
+    Color bg;
+    Color fg;
+    String label;
+
+    if (sale.isAnnulee) {
+      bg = const Color(0xFFFEE2E2);
+      fg = const Color(0xFF991B1B);
+      label = 'Annulée';
+    } else if (sale.isCredit) {
+      bg = const Color(0xFFEFF6FF);
+      fg = const Color(0xFF1D4ED8);
+      label = sale.statutPaiement == 'PAYE' ? 'Crédit soldé' : 'À crédit';
+    } else {
+      bg = const Color(0xFFD1FAE5);
+      fg = const Color(0xFF065F46);
+      label = 'Payé';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg),
+      ),
+    );
+  }
+
+  Widget _buildPaymentModeChip(String mode) {
+    Color bg;
+    Color fg;
+    String label;
+
+    switch (mode) {
+      case 'ESPECES':
+        bg = const Color(0xFFF0FDF4);
+        fg = const Color(0xFF15803D);
+        label = 'Espèces';
+        break;
+      case 'CARTE':
+        bg = const Color(0xFFFAF5FF);
+        fg = const Color(0xFF7E22CE);
+        label = 'Carte';
+        break;
+      case 'VIREMENT':
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF2563EB);
+        label = 'Virement';
+        break;
+      case 'CREDIT':
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFFB45309);
+        label = 'Crédit';
+        break;
+      default:
+        bg = AppTheme.backgroundColor;
+        fg = AppTheme.textPrimary;
+        label = mode;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: fg.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: fg),
+      ),
     );
   }
 }

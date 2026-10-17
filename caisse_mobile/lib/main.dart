@@ -11,6 +11,7 @@ import 'providers/auth_provider.dart';
 import 'providers/catalog_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/terminal_settings_provider.dart';
+import 'providers/sales_history_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/pos_screen.dart';
 
@@ -74,6 +75,9 @@ class CaisseApp extends StatelessWidget {
             storageService: storageService,
             scannerService: scannerService,
           ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => SalesHistoryProvider(apiService: apiService),
         ),
       ],
       child: MaterialApp(

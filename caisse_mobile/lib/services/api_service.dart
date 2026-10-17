@@ -3,6 +3,7 @@ import '../models/product.dart';
 import '../models/client.dart';
 import '../models/user.dart';
 import '../models/sale_response.dart';
+import '../models/sale.dart';
 import 'storage_service.dart';
 
 class ApiService {
@@ -149,6 +150,37 @@ class ApiService {
       return SaleResponse.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       final msg = e.response?.data?['error'] ?? 'Erreur lors de l\'enregistrement de la vente';
+      throw Exception(msg);
+    }
+  }
+
+  Future<List<VenteItem>> getSales({int page = 1, int pageSize = 30, String? search}) async {
+    try {
+      final res = await _dio.get(
+        '/api/ventes',
+        queryParameters: {
+          'page': page,
+          'pageSize': pageSize,
+          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        },
+      );
+      final rawList = res.data['data'] as List? ?? [];
+      return rawList
+          .map((item) => VenteItem.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error'] ?? 'Erreur lors du chargement de l\'historique des ventes';
+      throw Exception(msg);
+    }
+  }
+
+  Future<VenteItem> getSaleDetails(String id) async {
+    try {
+      final res = await _dio.get('/api/ventes/$id');
+      final data = res.data['data'] as Map<String, dynamic>;
+      return VenteItem.fromJson(data);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['error'] ?? 'Erreur lors du chargement des détails de la vente';
       throw Exception(msg);
     }
   }
