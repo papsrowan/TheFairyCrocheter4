@@ -5,7 +5,9 @@ class CartItem {
   final String? varianteId;
   final String nom;
   final String? couleur;
+  final String? couleurDescription;
   final String? codeBarres;
+  final String? imageUrl;
   int quantite;
   final double prixBase;
   final List<PalierPrix> paliers;
@@ -20,7 +22,9 @@ class CartItem {
     this.varianteId,
     required this.nom,
     this.couleur,
+    this.couleurDescription,
     this.codeBarres,
+    this.imageUrl,
     this.quantite = 1,
     required this.prixBase,
     this.paliers = const [],

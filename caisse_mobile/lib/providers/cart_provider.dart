@@ -13,16 +13,40 @@ class CartProvider extends ChangeNotifier {
   double _remiseGlobale = 0.0;
   String _modePaiement = 'ESPECES';
   double _montantRecu = 0.0;
-  DateTime? _dateEcheance; // Si paiement à crédit
   bool _isSubmitting = false;
 
+  // ─── OPTIONS AVANCÉES (ALIGNÉES SUR LE WEB /ventes/nouvelle) ─────────────
+  bool _showPrixSpecial = false;
+  double? _prixSpecial;
+  String? _motifPrixSpecial;
+
+  bool _payerPlusTard = false; // Mode Vente à Crédit
+  DateTime? _dateEcheance;
+
+  bool _paiementPartiel = false; // Acompte versé immédiatement
+  double? _montantPaye; // Montant de l'acompte
+
+  DateTime? _dateFacture; // Antidatage optionnel
+
+  // Getters
   List<CartItem> get items => List.unmodifiable(_items);
   Client? get client => _client;
   double get remiseGlobale => _remiseGlobale;
   String get modePaiement => _modePaiement;
   double get montantRecu => _montantRecu;
-  DateTime? get dateEcheance => _dateEcheance;
   bool get isSubmitting => _isSubmitting;
+
+  bool get showPrixSpecial => _showPrixSpecial;
+  double? get prixSpecial => _prixSpecial;
+  String? get motifPrixSpecial => _motifPrixSpecial;
+
+  bool get payerPlusTard => _payerPlusTard;
+  DateTime? get dateEcheance => _dateEcheance;
+
+  bool get paiementPartiel => _paiementPartiel;
+  double? get montantPaye => _montantPaye;
+
+  DateTime? get dateFacture => _dateFacture;
 
   int get totalArticles => _items.fold(0, (sum, item) => sum + item.quantite);
 
@@ -32,11 +56,42 @@ class CartProvider extends ChangeNotifier {
 
   double get totalRemises => totalRemisesLignes + _remiseGlobale;
 
-  double get total => (sousTotal - totalRemises).clamp(0.0, double.infinity);
+  // Total catalogue calculé
+  double get totalCalcule => (sousTotal - totalRemises).clamp(0.0, double.infinity);
+
+  // Total final effectif (prend en compte le prix spécial si activé)
+  double get total {
+    if (_showPrixSpecial && _prixSpecial != null && _prixSpecial! > 0) {
+      return _prixSpecial!;
+    }
+    return totalCalcule;
+  }
+
+  // Reste à payer pour les ventes à crédit ou acomptes
+  double get resteAPayer {
+    if (!_payerPlusTard) return 0.0;
+    if (_paiementPartiel && _montantPaye != null && _montantPaye! > 0) {
+      return (total - _montantPaye!).clamp(0.0, double.infinity);
+    }
+    return total;
+  }
+
+  // Montant devant être encaissé aujourd'hui (pour le calcul du rendu de monnaie)
+  double get montantAEncaisser {
+    if (_payerPlusTard) {
+      if (_paiementPartiel && _montantPaye != null) {
+        return _montantPaye!;
+      }
+      return 0.0;
+    }
+    return total;
+  }
 
   double get monnaieRendue {
-    if (_modePaiement != 'ESPECES' || _montantRecu <= total) return 0.0;
-    return _montantRecu - total;
+    if (_modePaiement != 'ESPECES') return 0.0;
+    final aPayer = montantAEncaisser;
+    if (_montantRecu <= aPayer) return 0.0;
+    return _montantRecu - aPayer;
   }
 
   // ─── GESTION DES ARTICLES ────────────────────────────────────────────────────
@@ -69,7 +124,9 @@ class CartProvider extends ChangeNotifier {
           varianteId: variante?.id,
           nom: product.nom,
           couleur: variante?.couleur,
+          couleurDescription: variante?.description,
           codeBarres: variante?.codeBarres ?? product.codeBarres,
+          imageUrl: product.imageUrl,
           quantite: quantity,
           prixBase: product.prixVente,
           paliers: product.paliers,
@@ -82,7 +139,7 @@ class CartProvider extends ChangeNotifier {
     }
 
     // Réinitialiser le montant reçu par défaut au montant total
-    _montantRecu = total;
+    _montantRecu = montantAEncaisser;
     FeedbackService.scanSuccess();
     notifyListeners();
     return true;
@@ -99,7 +156,7 @@ class CartProvider extends ChangeNotifier {
     } else if (newQty <= item.stockDisponible) {
       item.quantite = newQty;
     }
-    _montantRecu = total;
+    _montantRecu = montantAEncaisser;
     notifyListeners();
   }
 
@@ -112,7 +169,7 @@ class CartProvider extends ChangeNotifier {
     } else {
       _items[idx].quantite = quantity.clamp(1, _items[idx].stockDisponible);
     }
-    _montantRecu = total;
+    _montantRecu = montantAEncaisser;
     notifyListeners();
   }
 
@@ -120,14 +177,14 @@ class CartProvider extends ChangeNotifier {
     final idx = _items.indexWhere((i) => i.cartKey == cartKey);
     if (idx >= 0) {
       _items[idx].remise = discount.clamp(0.0, _items[idx].sousTotal);
-      _montantRecu = total;
+      _montantRecu = montantAEncaisser;
       notifyListeners();
     }
   }
 
   void removeItem(String cartKey) {
     _items.removeWhere((i) => i.cartKey == cartKey);
-    _montantRecu = total;
+    _montantRecu = montantAEncaisser;
     notifyListeners();
   }
 
@@ -145,7 +202,7 @@ class CartProvider extends ChangeNotifier {
 
   void setRemiseGlobale(double remise) {
     _remiseGlobale = remise.clamp(0.0, sousTotal);
-    _montantRecu = total;
+    _montantRecu = montantAEncaisser;
     notifyListeners();
   }
 
@@ -159,8 +216,60 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─── CONTRÔLES DES OPTIONS AVANCÉES ──────────────────────────────────────────
+
+  void setPrixSpecialEnabled(bool enabled) {
+    _showPrixSpecial = enabled;
+    if (!enabled) {
+      _prixSpecial = null;
+      _motifPrixSpecial = null;
+    }
+    _montantRecu = montantAEncaisser;
+    notifyListeners();
+  }
+
+  void setPrixSpecial(double? prix, {String? motif}) {
+    _prixSpecial = prix;
+    if (motif != null) _motifPrixSpecial = motif;
+    _montantRecu = montantAEncaisser;
+    notifyListeners();
+  }
+
+  void setPayerPlusTard(bool enabled) {
+    _payerPlusTard = enabled;
+    if (!enabled) {
+      _paiementPartiel = false;
+      _montantPaye = null;
+      _dateEcheance = null;
+    }
+    _montantRecu = montantAEncaisser;
+    notifyListeners();
+  }
+
   void setDateEcheance(DateTime? dt) {
     _dateEcheance = dt;
+    notifyListeners();
+  }
+
+  void setPaiementPartiel(bool enabled, {double? montant}) {
+    _paiementPartiel = enabled;
+    if (!enabled) {
+      _montantPaye = null;
+    } else if (montant != null) {
+      _montantPaye = montant.clamp(0.0, total);
+    }
+    _montantRecu = montantAEncaisser;
+    notifyListeners();
+  }
+
+  void setMontantPaye(double? montant) {
+    _montantPaye = montant?.clamp(0.0, total);
+    _montantRecu = montantAEncaisser;
+    notifyListeners();
+  }
+
+  void setDateFacture(DateTime? dt) {
+    _dateFacture = dt;
     notifyListeners();
   }
 
@@ -170,7 +279,14 @@ class CartProvider extends ChangeNotifier {
     _remiseGlobale = 0.0;
     _modePaiement = 'ESPECES';
     _montantRecu = 0.0;
+    _showPrixSpecial = false;
+    _prixSpecial = null;
+    _motifPrixSpecial = null;
+    _payerPlusTard = false;
     _dateEcheance = null;
+    _paiementPartiel = false;
+    _montantPaye = null;
+    _dateFacture = null;
     notifyListeners();
   }
 
@@ -191,9 +307,18 @@ class CartProvider extends ChangeNotifier {
       'clientId': _client?.id,
       'lignes': _items.map((i) => i.toApiLigne()).toList(),
       'remiseGlobale': _remiseGlobale,
-      'modePaiement': _modePaiement,
-      if (_modePaiement == 'CREDIT' && _dateEcheance != null)
+      'modePaiement': _payerPlusTard ? 'CREDIT' : _modePaiement,
+      if (_showPrixSpecial && _prixSpecial != null && _prixSpecial! > 0) ...{
+        'prixSpecial': _prixSpecial,
+        if (_motifPrixSpecial != null && _motifPrixSpecial!.trim().isNotEmpty)
+          'motifPrixSpecial': _motifPrixSpecial!.trim(),
+      },
+      if (_payerPlusTard && _dateEcheance != null)
         'dateEcheance': _dateEcheance!.toUtc().toIso8601String(),
+      if (_payerPlusTard && _paiementPartiel && _montantPaye != null && _montantPaye! > 0)
+        'montantPaye': _montantPaye,
+      if (_dateFacture != null)
+        'dateFacture': _dateFacture!.toUtc().toIso8601String(),
     };
 
     try {

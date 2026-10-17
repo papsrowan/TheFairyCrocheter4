@@ -508,7 +508,7 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                         padding: const EdgeInsets.all(12),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 0.88,
+                          childAspectRatio: 0.72,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
@@ -626,6 +626,33 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                   children: [
                     const Text('Remises accordées :', style: TextStyle(color: AppTheme.secondaryColor)),
                     Text('-${AppConstants.formatCurrency(cart.totalRemises)}', style: const TextStyle(color: AppTheme.secondaryColor, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ],
+
+              if (cart.showPrixSpecial && cart.prixSpecial != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Prix spécial négocié :', style: TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.bold)),
+                    Text(AppConstants.formatCurrency(cart.prixSpecial!), style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ],
+
+              if (cart.payerPlusTard) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(cart.paiementPartiel ? 'Acompte immédiat :' : 'Modalité :', style: const TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.w700)),
+                    Text(
+                      cart.paiementPartiel
+                          ? AppConstants.formatCurrency(cart.montantAEncaisser)
+                          : 'Vente à crédit',
+                      style: const TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ],
