@@ -15,7 +15,6 @@ import '../widgets/cart_tile.dart';
 import 'variant_selection_dialog.dart';
 import 'client_search_modal.dart';
 import 'checkout_dialog.dart';
-import 'camera_scanner_screen.dart';
 import 'settings_screen.dart';
 
 class PosScreen extends StatefulWidget {
@@ -135,17 +134,6 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
             cart.addItem(product, variante: entry.key, quantity: entry.value);
           }
         },
-      ),
-    );
-  }
-
-  void _openCameraScanner() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CameraScannerScreen(
-          onScanned: (code) => _handleBarcode(code),
-        ),
       ),
     );
   }
@@ -367,18 +355,17 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                 ),
               ),
               const SizedBox(width: 8),
-              InkWell(
-                onTap: _openCameraScanner,
-                borderRadius: BorderRadius.circular(10),
+              Tooltip(
+                message: 'Scanner matériel prêt. Appuyez sur la touche scan physique.',
                 child: Container(
                   height: 48,
                   width: 48,
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryLight,
+                    color: AppTheme.secondaryLight,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                    border: Border.all(color: AppTheme.secondaryColor.withValues(alpha: 0.3)),
                   ),
-                  child: const Icon(Icons.qr_code_scanner, color: AppTheme.primaryColor),
+                  child: const Icon(Icons.barcode_reader, color: AppTheme.secondaryColor),
                 ),
               ),
             ],
@@ -416,13 +403,35 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.inventory_2_outlined, size: 48, color: AppTheme.textSecondary),
+                          Icon(
+                            catalog.errorMessage != null ? Icons.cloud_off : Icons.inventory_2_outlined,
+                            size: 48,
+                            color: catalog.errorMessage != null ? AppTheme.errorColor : AppTheme.textSecondary,
+                          ),
                           const SizedBox(height: 12),
-                          const Text('Aucun produit trouvé', style: TextStyle(fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 8),
-                          TextButton(
+                          Text(
+                            catalog.errorMessage != null ? 'Erreur de connexion au catalogue' : 'Aucun produit trouvé',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          if (catalog.errorMessage != null) ...[
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: Text(
+                                catalog.errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(180, 42),
+                            ),
                             onPressed: () => catalog.loadCatalog(force: true),
-                            child: const Text('Actualiser le catalogue'),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Actualiser le catalogue'),
                           ),
                         ],
                       ),

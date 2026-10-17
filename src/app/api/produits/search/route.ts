@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const q = searchParams.get("q")?.trim() ?? "";
-  const limit = Math.min(24, parseInt(searchParams.get("limit") ?? "10"));
   const all   = searchParams.get("all") === "1"; // afficher tous les produits
+  const limit = Math.min(200, parseInt(searchParams.get("limit") ?? (all ? "100" : "10")));
 
   // Détecter si c'est un scan code-barres (numérique uniquement)
   const isBarcode = /^\d{4,}$/.test(q);

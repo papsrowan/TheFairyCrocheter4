@@ -41,8 +41,18 @@ export default auth(async function middleware(req: NextRequest) {
   const isPublic = PUBLIC_ROUTES.some((route) => pathname.startsWith(route));
   if (isPublic) return NextResponse.next();
 
-  // 2. Rediriger vers login si non authentifié
+  // Pour les appels API avec jeton Bearer (mobile POS), laisser passer vers les route handlers qui valident le JWT
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (pathname.startsWith("/api/") && authHeader?.toLowerCase().startsWith("bearer ")) {
+    return NextResponse.next();
+  }
+
+  // 2. Rediriger vers login si non authentifié (ou renvoyer 401 JSON pour les API)
   if (!session?.user) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
     // Utiliser NEXTAUTH_URL si défini (ngrok/prod), sinon reconstruire depuis les headers proxy
     const base =
       process.env.NEXTAUTH_URL ??
