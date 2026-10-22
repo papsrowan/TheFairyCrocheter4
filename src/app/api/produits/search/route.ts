@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth-mobile";
 import { prisma } from "@/lib/db";
 import { hasPermission } from "@/lib/security/rbac";
 import type { Role } from "@prisma/client";
@@ -12,7 +13,7 @@ import type { Role } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await getAuthenticatedUser(req);
   if (!session?.user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }

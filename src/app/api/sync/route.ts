@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth-mobile";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { createVenteSchema } from "@/lib/validations/vente.schema";
@@ -27,7 +28,7 @@ const syncPayloadSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getAuthenticatedUser(req);
   if (!session?.user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }

@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { auth } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth-mobile";
 import { prisma } from "@/lib/db";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rateLimit";
 import { hasPermission } from "@/lib/security/rbac";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 // ─── GET /api/clients ─────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await getAuthenticatedUser(req);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const role = session.user.role as Role;
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/clients ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getAuthenticatedUser(req);
   if (!session?.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const role = session.user.role as Role;
