@@ -96,9 +96,15 @@ export async function POST(req: NextRequest) {
   }).catch(() => null);
 
   // Journal d'audit
-  await audit(user.id, AUDIT_ACTIONS.AUTH_SIGNIN, "user", user.id, {
-    client: "mobile_pos_terminal",
-    email: user.email,
+  await audit({
+    userId: user.id,
+    action: AUDIT_ACTIONS.AUTH_SIGNIN,
+    entityType: "user",
+    entityId: user.id,
+    details: {
+      client: "mobile_pos_terminal",
+      email: user.email,
+    },
   }).catch(() => null);
 
   const token = await signMobileToken({
