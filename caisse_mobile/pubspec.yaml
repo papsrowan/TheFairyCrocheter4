@@ -41,6 +41,9 @@ dependencies:
   pdf: ^3.11.1
   esc_pos_utils_plus: ^2.0.4
 
+dependency_overrides:
+  archive: ^4.5.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
