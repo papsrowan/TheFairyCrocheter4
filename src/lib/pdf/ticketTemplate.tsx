@@ -85,6 +85,14 @@ export interface TicketPDFProps {
   };
 }
 
+function cleanProductName(name: string): string {
+  const cleaned = name
+    .replace(/\s*\(.*?\)/g, "")
+    .replace(/\s*#[0-9a-fA-F]{3,8}/g, "")
+    .trim();
+  return cleaned.length > 0 ? cleaned : name;
+}
+
 export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
   const logoBase64 = getLogoBase64();
   return (
@@ -96,14 +104,17 @@ export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
           <PDFImage src={logoBase64} style={{ width: 36, height: 36, alignSelf: "center", marginBottom: 3, objectFit: "contain" }} />
         ) : null}
         <Text style={[styles.center, styles.bold, { fontSize: 11, marginBottom: 2 }]}>
-          {entreprise.nom}
+          THE FAIRY CROCHETER
         </Text>
         <Text style={[styles.center, styles.small]}>
-          {entreprise.adresse}, {entreprise.codePostal} {entreprise.ville}
+          Akwa à la borne fontaine bebe-eyidi face la clinique le gros chêne.
         </Text>
-        {entreprise.telephone && (
-          <Text style={[styles.center, styles.small]}>{entreprise.telephone}</Text>
-        )}
+        <Text style={[styles.center, styles.small]}>
+          15521 Douala
+        </Text>
+        <Text style={[styles.center, styles.small, styles.bold]}>
+          +237 676996717
+        </Text>
 
         <View style={styles.divider} />
 
@@ -132,10 +143,12 @@ export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
         <View style={styles.divider} />
 
         {/* Articles */}
-        {vente.lignes.map((ligne) => (
+        {vente.lignes.map((ligne) => {
+          const nomPur = cleanProductName(ligne.produit.nom);
+          return (
           <View key={ligne.id} style={{ marginBottom: 6 }}>
             <Text style={[styles.bold, { fontSize: 7.5 }]}>
-              {ligne.produit.nom.length > 35 ? ligne.produit.nom.slice(0, 35) + "…" : ligne.produit.nom}
+              {nomPur.length > 35 ? nomPur.slice(0, 35) + "…" : nomPur}
             </Text>
             <View style={styles.row}>
               <Text style={styles.small}>
@@ -161,7 +174,8 @@ export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
               </View>
             )}
           </View>
-        ))}
+          );
+        })}
 
         <View style={styles.divider} />
 
@@ -210,13 +224,16 @@ export function TicketPDF({ vente, entreprise }: TicketPDFProps) {
           </Text>
         </View>
 
-        {/* Pied */}
-        <View style={{ marginTop: 8 }}>
-          <Text style={[styles.center, styles.small]}>
-            {entreprise.piedPageFacture ?? "Merci de votre confiance !"}
+        {/* Mentions légales & Pied */}
+        <View style={{ marginTop: 6 }}>
+          <Text style={[styles.center, { fontSize: 6.2, color: "#333", marginBottom: 3, lineHeight: 1.25 }]}>
+            {"Après validation de la facture ou de la commande, aucun changement de couleur,model, ou reference ne sera accepté. Ls articles vendus ne sont ni repris ni remboursés."}
           </Text>
-          <Text style={[styles.center, styles.small, { marginTop: 2 }]}>
-            {"Conservez ce ticket comme preuve d'achat"}
+          <Text style={[styles.center, styles.bold, { fontSize: 7.5 }]}>
+            {"Merci pour votre confiance"}
+          </Text>
+          <Text style={[styles.center, styles.small, { marginTop: 1 }]}>
+            {"conservez ce ticket comme preuve d'achat."}
           </Text>
         </View>
       </Page>

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:pdf/pdf.dart';
@@ -18,6 +19,7 @@ class ReceiptData {
   final String modePaiement;
   final double? montantRecu;
   final double? monnaieRendue;
+  final String? notes;
 
   ReceiptData({
     required this.numeroVente,
@@ -31,12 +33,47 @@ class ReceiptData {
     required this.modePaiement,
     this.montantRecu,
     this.monnaieRendue,
+    this.notes,
   });
+
+  String get formattedModePaiement {
+    switch (modePaiement.toUpperCase()) {
+      case 'ESPECES':
+        return 'Espèces';
+      case 'CARTE':
+        return 'Carte bancaire';
+      case 'VIREMENT':
+        return 'Virement';
+      case 'CHEQUE':
+        return 'Chèque';
+      case 'MIXTE':
+        return 'Paiement mixte';
+      case 'CREDIT':
+        return 'À crédit / Différé';
+      default:
+        return modePaiement;
+    }
+  }
 }
 
 class PrinterService {
   static const MethodChannel _nativeChannel =
       MethodChannel('com.thefairycrocheter.pos/scanner_config');
+
+  /// Nettoie le nom de l'article en supprimant strictement tout détail ou parenthèse
+  /// indiquant la couleur (ex: 'Pelote Coton (Bleu)' devient 'Pelote Coton').
+  static String cleanItemTitle(CartItem item) {
+    final name = item.nom
+        .replaceAll(RegExp(r'\s*\(.*?\)'), '')
+        .replaceAll(RegExp(r'\s*#[0-9a-fA-F]{3,8}'), '')
+        .trim();
+    return name.isNotEmpty ? name : item.nom;
+  }
+
+  static bool isHexColor(String str) {
+    final s = str.trim();
+    return RegExp(r'^#?[0-9a-fA-F]{3,8}$').hasMatch(s);
+  }
 
   /// ─── IMPRESSION HARDWARE DIRECTE (PORTS SÉRIES ESC/POS / DEV / BROADCAST) ───
   /// Envoie le flux d'octets ESC/POS directement aux périphériques thermiques internes
@@ -55,33 +92,46 @@ class PrinterService {
 
   /// ─── IMPRESSION UNIFIÉE INTELLIGENTE (AUTO HARDWARE -> FALLBACK SPOOLER) ────
   static Future<bool> printReceiptSmart(ReceiptData data, {String? mode}) async {
-    // 1. Tenter d'abord l'impression matérielle directe (ESC/POS immédiat)
-    if (mode == null || mode == 'esc_pos') {
+    // Si le mode 'esc_pos' est explicitement configuré, tenter le matériel direct
+    if (mode == 'esc_pos') {
       final hwOk = await printReceiptDirectHardware(data);
       if (hwOk) return true;
     }
 
-    // 2. Fallback ou mode sélectionné : Spooler Android corrigé (hauteur finie)
+    // Par défaut et pour le terminal POS (service 'LocalPrinter' 58mm),
+    // on utilise l'impression native système garantie :
     return await printReceiptNative(data);
   }
 
   // ─── IMPRESSION ANDROID DIRECTE (SPOOLER / SERVICE SYSTÈME) ─────────────────
   // Imprime sur l'imprimante thermique par défaut du terminal POS Android (localPrinter)
+  // Format et graphisme identiques au ticket officiel du site web (ticketTemplate.tsx)
   static Future<bool> printReceiptNative(ReceiptData data) async {
     try {
       final doc = pw.Document();
 
-      // Hauteur finie calculée pour éviter le crash 'double.infinity' sur localPrinter
-      final double calculatedHeightMm = (90.0 +
-              (data.items.length * 15.0) +
-              (data.remiseGlobale > 0 ? 15.0 : 0.0) +
-              (data.montantRecu != null ? 20.0 : 0.0))
-          .clamp(120.0, 500.0);
+      // Charger le logo officiel (assets/images/logo.png)
+      pw.MemoryImage? logoImage;
+      try {
+        final logoBytes = await rootBundle.load('assets/images/logo.png');
+        logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+      } catch (e) {
+        debugPrint('Logo load error: $e');
+      }
+
+      final int barcodesCount = data.items.where((it) => it.codeBarres != null && it.codeBarres!.isNotEmpty).length;
+      final double calculatedHeightMm = (165.0 +
+              (data.items.length * 18.0) +
+              (barcodesCount * 8.0) +
+              (data.remiseGlobale > 0 ? 12.0 : 0.0) +
+              (data.montantRecu != null ? 18.0 : 0.0) +
+              (data.notes != null ? 10.0 : 0.0))
+          .clamp(185.0, 950.0);
 
       final pageFormat = PdfPageFormat(
         58 * PdfPageFormat.mm,
         calculatedHeightMm * PdfPageFormat.mm,
-        marginAll: 2 * PdfPageFormat.mm,
+        marginAll: 1.5 * PdfPageFormat.mm,
       );
 
       doc.addPage(
@@ -94,92 +144,132 @@ class PrinterService {
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 mainAxisSize: pw.MainAxisSize.min,
                 children: [
-                  // En-tête
+                  // Logo de la boutique (identique au site web)
+                  if (logoImage != null) ...[
+                    pw.Center(
+                      child: pw.Image(
+                        logoImage,
+                        width: 44,
+                        height: 44,
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                  ],
+
+                  // En-tête officiel
                   pw.Text(
                     'THE FAIRY CROCHETER',
                     style: pw.TextStyle(
-                      fontSize: 11,
+                      fontSize: 12.5,
                       fontWeight: pw.FontWeight.bold,
                     ),
                     textAlign: pw.TextAlign.center,
                   ),
-                  pw.SizedBox(height: 2),
+                  pw.SizedBox(height: 1),
                   pw.Text(
-                    'Boutique de crochet & accessoires',
-                    style: const pw.TextStyle(fontSize: 7),
+                    'Akwa à la borne fontaine bebe-eyidi face la clinique le gros chêne.',
+                    style: const pw.TextStyle(fontSize: 7.5),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    '15521 Douala',
+                    style: const pw.TextStyle(fontSize: 7.5),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.Text(
+                    '+237 676996717',
+                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
                     textAlign: pw.TextAlign.center,
                   ),
                   pw.SizedBox(height: 4),
-                  pw.Divider(thickness: 0.5, borderStyle: pw.BorderStyle.dashed),
+                  pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed, color: PdfColors.grey600),
 
-                  // Métadonnées
+                  // Infos ticket
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Ticket N°:', style: const pw.TextStyle(fontSize: 7.5)),
-                      pw.Text(data.numeroVente, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Ticket', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                      pw.Text(data.numeroVente, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
+                  pw.SizedBox(height: 1),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Date:', style: const pw.TextStyle(fontSize: 7.5)),
-                      pw.Text(AppConstants.formatDateTime(data.date), style: const pw.TextStyle(fontSize: 7.5)),
+                      pw.Text('Date', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                      pw.Text(AppConstants.formatDateTime(data.date), style: const pw.TextStyle(fontSize: 8.5)),
                     ],
                   ),
+                  pw.SizedBox(height: 1),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Caissier:', style: const pw.TextStyle(fontSize: 7.5)),
-                      pw.Text(data.caissierNom, style: const pw.TextStyle(fontSize: 7.5)),
+                      pw.Text('Vendeur', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                      pw.Text(data.caissierNom, style: const pw.TextStyle(fontSize: 8.5)),
                     ],
                   ),
-                  if (data.clientNom != null && data.clientNom!.isNotEmpty) ...[
+                  if (data.clientNom != null && data.clientNom!.trim().isNotEmpty) ...[
+                    pw.SizedBox(height: 1),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Client:', style: const pw.TextStyle(fontSize: 7.5)),
-                        pw.Text(data.clientNom!, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Client', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                        pw.Text(data.clientNom!, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ],
 
                   pw.SizedBox(height: 4),
-                  pw.Divider(thickness: 0.5, borderStyle: pw.BorderStyle.dashed),
+                  pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed, color: PdfColors.grey600),
 
                   // Articles
                   ...data.items.map((item) {
-                    final desc = item.couleur != null ? '${item.nom} (${item.couleur})' : item.nom;
+                    final desc = cleanItemTitle(item);
                     return pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
+                      padding: const pw.EdgeInsets.symmetric(vertical: 2.0),
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
                           pw.Text(
                             desc,
-                            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                            style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold),
                             maxLines: 2,
                           ),
+                          pw.SizedBox(height: 1),
                           pw.Row(
                             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                             children: [
                               pw.Text(
-                                '${item.quantite} x ${AppConstants.formatCurrency(item.prixUnitaire)}',
-                                style: const pw.TextStyle(fontSize: 7),
+                                '${item.quantite} × ${AppConstants.formatCurrency(item.prixUnitaire)}${item.remise > 0 ? '  -${item.remise.toInt()} XAF' : ''}',
+                                style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
                               ),
                               pw.Text(
                                 AppConstants.formatCurrency(item.total),
-                                style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                                style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold),
                               ),
                             ],
                           ),
-                          if (item.remise > 0) ...[
-                            pw.Row(
-                              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                              children: [
-                                pw.Text('Remise:', style: const pw.TextStyle(fontSize: 6.5)),
-                                pw.Text('-${AppConstants.formatCurrency(item.remise)}', style: const pw.TextStyle(fontSize: 6.5)),
-                              ],
+                          // Code-barres individuel de l'article (si disponible comme sur le web)
+                          if (item.codeBarres != null && item.codeBarres!.trim().isNotEmpty) ...[
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.only(top: 2, bottom: 2),
+                              child: pw.Column(
+                                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                children: [
+                                  pw.BarcodeWidget(
+                                    barcode: pw.Barcode.code128(),
+                                    data: item.codeBarres!,
+                                    width: 85,
+                                    height: 16,
+                                    drawText: false,
+                                  ),
+                                  pw.Text(
+                                    item.codeBarres!,
+                                    style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey700),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ],
@@ -188,15 +278,15 @@ class PrinterService {
                   }),
 
                   pw.SizedBox(height: 4),
-                  pw.Divider(thickness: 0.5, borderStyle: pw.BorderStyle.dashed),
+                  pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed, color: PdfColors.grey600),
 
                   // Totaux
                   if (data.remiseGlobale > 0 || data.sousTotal != data.total) ...[
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Sous-total:', style: const pw.TextStyle(fontSize: 7.5)),
-                        pw.Text(AppConstants.formatCurrency(data.sousTotal), style: const pw.TextStyle(fontSize: 7.5)),
+                        pw.Text('Sous-total', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                        pw.Text(AppConstants.formatCurrency(data.sousTotal), style: const pw.TextStyle(fontSize: 8.5)),
                       ],
                     ),
                   ],
@@ -204,62 +294,114 @@ class PrinterService {
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Remise globale:', style: const pw.TextStyle(fontSize: 7.5)),
-                        pw.Text('-${AppConstants.formatCurrency(data.remiseGlobale)}', style: const pw.TextStyle(fontSize: 7.5)),
+                        pw.Text('Remise globale', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.green700)),
+                        pw.Text('-${AppConstants.formatCurrency(data.remiseGlobale)}', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.green700)),
                       ],
                     ),
                   ],
-                  pw.SizedBox(height: 2),
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text('TOTAL:', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-                      pw.Text(
-                        AppConstants.formatCurrency(data.total),
-                        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-                      ),
-                    ],
+
+                  // Cadre TOTAL avec ligne supérieure
+                  pw.Container(
+                    margin: const pw.EdgeInsets.only(top: 3),
+                    padding: const pw.EdgeInsets.only(top: 4),
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(top: pw.BorderSide(width: 1.5, color: PdfColors.black)),
+                    ),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('TOTAL', style: pw.TextStyle(fontSize: 12.5, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          AppConstants.formatCurrency(data.total),
+                          style: pw.TextStyle(fontSize: 12.5, fontWeight: pw.FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
 
-                  pw.SizedBox(height: 4),
-                  pw.Divider(thickness: 0.5, borderStyle: pw.BorderStyle.dashed),
-
                   // Détail paiement
+                  pw.SizedBox(height: 4),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Paiement:', style: const pw.TextStyle(fontSize: 7.5)),
-                      pw.Text(data.modePaiement, style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Paiement', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                      pw.Text(data.formattedModePaiement, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                   if (data.montantRecu != null && data.montantRecu! > 0) ...[
+                    pw.SizedBox(height: 1),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Reçu (Espèces):', style: const pw.TextStyle(fontSize: 7.5)),
-                        pw.Text(AppConstants.formatCurrency(data.montantRecu!), style: const pw.TextStyle(fontSize: 7.5)),
+                        pw.Text('Reçu (Espèces)', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+                        pw.Text(AppConstants.formatCurrency(data.montantRecu!), style: const pw.TextStyle(fontSize: 8.5)),
                       ],
                     ),
                     if (data.monnaieRendue != null && data.monnaieRendue! > 0) ...[
+                      pw.SizedBox(height: 1),
                       pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Monnaie rendue:', style: const pw.TextStyle(fontSize: 7.5)),
-                          pw.Text(AppConstants.formatCurrency(data.monnaieRendue!), style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                          pw.Text('Monnaie rendue', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          pw.Text(AppConstants.formatCurrency(data.monnaieRendue!), style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
                         ],
                       ),
                     ],
                   ],
 
-                  pw.SizedBox(height: 8),
+                  if (data.notes != null && data.notes!.trim().isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Align(
+                      alignment: pw.Alignment.centerLeft,
+                      child: pw.Text('Notes : ${data.notes!}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                    ),
+                  ],
+
+                  pw.SizedBox(height: 5),
+                  pw.Divider(thickness: 0.8, borderStyle: pw.BorderStyle.dashed, color: PdfColors.grey600),
+
+                  // Code-barres du ticket (comme sur le site web)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Column(
+                      children: [
+                        pw.BarcodeWidget(
+                          barcode: pw.Barcode.code128(),
+                          data: data.numeroVente,
+                          width: 130,
+                          height: 26,
+                          drawText: false,
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          data.numeroVente,
+                          style: pw.TextStyle(
+                            fontSize: 7.5,
+                            fontWeight: pw.FontWeight.bold,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Mentions légales sous le code-barres
+                  pw.SizedBox(height: 5),
                   pw.Text(
-                    'Merci pour votre visite !',
-                    style: const pw.TextStyle(fontSize: 7.5),
+                    'Après validation de la facture ou de la commande, aucun changement de couleur,model, ou reference ne sera accepté. Ls articles vendus ne sont ni repris ni remboursés.',
+                    style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey800),
                     textAlign: pw.TextAlign.center,
                   ),
+                  pw.SizedBox(height: 4),
                   pw.Text(
-                    'thefairycrocheter.fr',
-                    style: const pw.TextStyle(fontSize: 6.5),
+                    'Merci pour votre confiance',
+                    style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    "conservez ce ticket comme preuve d'achat.",
+                    style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
                     textAlign: pw.TextAlign.center,
                   ),
                   pw.SizedBox(height: 12),
@@ -270,12 +412,13 @@ class PrinterService {
         ),
       );
 
-      // Envoi direct à l'imprimante
+      // Envoi direct au service d'impression
       return await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => doc.save(),
         name: 'Ticket_${data.numeroVente}',
       );
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('Printing error: $e\n$stack');
       return false;
     }
   }
@@ -290,9 +433,11 @@ class PrinterService {
     bytes += generator.reset();
     bytes += generator.text(
       'THE FAIRY CROCHETER',
-      styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size1, width: PosTextSize.size1),
+      styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size1),
     );
-    bytes += generator.text('Boutique de crochet & accessoires', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.text('Akwa a la borne fontaine bebe-eyidi', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.text('face la clinique le gros chene.', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.text('15521 Douala - +237 676996717', styles: const PosStyles(align: PosAlign.center, bold: true));
     bytes += generator.feed(1);
     bytes += generator.hr();
 
@@ -318,22 +463,22 @@ class PrinterService {
 
     // Articles
     for (final item in data.items) {
-      final desc = item.couleur != null ? '${item.nom} (${item.couleur})' : item.nom;
+      final desc = cleanItemTitle(item);
       bytes += generator.text(desc, styles: const PosStyles(bold: true));
       bytes += generator.row([
         PosColumn(text: '${item.quantite}x ${item.prixUnitaire.toInt()}', width: 6),
-        PosColumn(text: '${item.total.toInt()} XAF', width: 6, styles: const PosStyles(align: PosAlign.right)),
+        PosColumn(text: '${item.total.toInt()} XAF', width: 6, styles: const PosStyles(align: PosAlign.right, bold: true)),
       ]);
     }
 
     bytes += generator.hr();
     bytes += generator.row([
-      PosColumn(text: 'TOTAL', width: 6, styles: const PosStyles(bold: true)),
-      PosColumn(text: '${data.total.toInt()} XAF', width: 6, styles: const PosStyles(align: PosAlign.right, bold: true)),
+      PosColumn(text: 'TOTAL', width: 5, styles: const PosStyles(bold: true, height: PosTextSize.size2)),
+      PosColumn(text: '${data.total.toInt()} XAF', width: 7, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2)),
     ]);
     bytes += generator.row([
       PosColumn(text: 'Mode:', width: 6),
-      PosColumn(text: data.modePaiement, width: 6, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(text: data.formattedModePaiement, width: 6, styles: const PosStyles(align: PosAlign.right, bold: true)),
     ]);
 
     if (data.montantRecu != null && data.montantRecu! > 0) {
@@ -350,7 +495,10 @@ class PrinterService {
     }
 
     bytes += generator.feed(1);
-    bytes += generator.text('Merci pour votre visite !', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.text('Apres validation de la facture ou de la commande, aucun changement de couleur,model, ou reference ne sera accepte. Ls articles vendus ne sont ni repris ni rembourses.', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.feed(1);
+    bytes += generator.text('Merci pour votre confiance', styles: const PosStyles(align: PosAlign.center, bold: true));
+    bytes += generator.text("conservez ce ticket comme preuve d'achat.", styles: const PosStyles(align: PosAlign.center));
     bytes += generator.feed(2);
     bytes += generator.cut();
 

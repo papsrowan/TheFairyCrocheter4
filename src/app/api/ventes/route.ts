@@ -64,8 +64,8 @@ export async function GET(req: NextRequest) {
         vendeur: { select: { id: true, nom: true, prenom: true } },
         lignes: {
           include: {
-            produit: { select: { id: true, nom: true, imageUrl: true } },
-            variante: { select: { id: true, couleur: true, description: true } },
+            produit: { select: { id: true, nom: true, imageUrl: true, codeBarres: true } },
+            variante: { select: { id: true, couleur: true, description: true, codeBarres: true } },
           },
         },
       },
@@ -221,7 +221,12 @@ export async function POST(req: NextRequest) {
         },
         include: {
           client: { select: { id: true, nom: true, prenom: true, email: true } },
-          lignes: { include: { produit: { select: { id: true, nom: true } } } },
+          lignes: {
+            include: {
+              produit: { select: { id: true, nom: true, imageUrl: true, codeBarres: true } },
+              variante: { select: { id: true, couleur: true, description: true, codeBarres: true } },
+            },
+          },
         },
       });
 

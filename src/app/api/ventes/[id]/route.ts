@@ -40,7 +40,7 @@ export async function GET(
             select: { id: true, nom: true, codeBarres: true, imageUrl: true },
           },
           variante: {
-            select: { id: true, couleur: true, description: true },
+            select: { id: true, couleur: true, description: true, codeBarres: true },
           },
         },
       },

@@ -5,6 +5,7 @@ import '../config/constants.dart';
 import '../config/theme.dart';
 import '../models/sale.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../services/printer_service.dart';
 import '../utils/color_utils.dart';
 import '../widgets/product_image.dart';
@@ -26,7 +27,15 @@ class _SaleDetailModalState extends State<SaleDetailModal> {
     final auth = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final receiptData = widget.sale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
+    VenteItem currentSale = widget.sale;
+    if (widget.sale.lignes.any((l) => l.codeBarres == null || l.codeBarres!.isEmpty)) {
+      try {
+        final api = context.read<ApiService>();
+        currentSale = await api.getSaleDetails(widget.sale.id);
+      } catch (_) {}
+    }
+
+    final receiptData = currentSale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
 
     try {
       final success = await PrinterService.printReceiptSmart(receiptData);

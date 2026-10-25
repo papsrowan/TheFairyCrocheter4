@@ -191,12 +191,6 @@ class MainActivity : FlutterActivity() {
             "/dev/cash_drawer",
             "/dev/cashbox",
             "/dev/drawer",
-            "/dev/ttyMT0",
-            "/dev/ttyMT1",
-            "/dev/ttyMT2",
-            "/dev/ttyS0",
-            "/dev/ttyS1",
-            "/dev/ttyUSB0",
             "/dev/printer",
             "/dev/usb/lp0"
         )
@@ -225,7 +219,7 @@ class MainActivity : FlutterActivity() {
     private fun printDirectHardware(bytes: ByteArray): Boolean {
         var success = false
 
-        // 1. Broadcasts d'impression standards POS (ZCS, Sunmi, Urovo, etc.)
+        // 1. Broadcasts d'impression standards POS (envoyés en arrière-plan)
         val printIntents = listOf(
             "com.pos.action.PRINT",
             "net.nyx.printerservice.PRINT_RAW_DATA",
@@ -239,19 +233,11 @@ class MainActivity : FlutterActivity() {
                 intent.putExtra("data", bytes)
                 intent.putExtra("bytes", bytes)
                 sendBroadcast(intent)
-                success = true
             } catch (_: Exception) {}
         }
 
-        // 2. Écriture directe sur les ports séries et périphériques d'impression thermique interne
+        // 2. Écriture directe sur périphériques d'impression thermique USB / Printer
         val candidatePorts = listOf(
-            "/dev/ttyMT1",
-            "/dev/ttyMT0",
-            "/dev/ttyMT2",
-            "/dev/ttyS1",
-            "/dev/ttyS0",
-            "/dev/ttyS2",
-            "/dev/ttyUSB0",
             "/dev/printer",
             "/dev/usb/lp0"
         )

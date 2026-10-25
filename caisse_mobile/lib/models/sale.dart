@@ -8,6 +8,7 @@ class LigneVenteItem {
   final String nomProduit;
   final String? couleur;
   final String? couleurDescription;
+  final String? codeBarres;
   final String? imageUrl;
   final int quantite;
   final double prixUnitaire;
@@ -22,6 +23,7 @@ class LigneVenteItem {
     required this.nomProduit,
     this.couleur,
     this.couleurDescription,
+    this.codeBarres,
     this.imageUrl,
     required this.quantite,
     required this.prixUnitaire,
@@ -33,10 +35,12 @@ class LigneVenteItem {
   factory LigneVenteItem.fromJson(Map<String, dynamic> json) {
     String nom = 'Produit inconnu';
     String? img;
+    String? cBarres;
     if (json['produit'] is Map) {
       final p = json['produit'] as Map<String, dynamic>;
       nom = p['nom'] as String? ?? nom;
       img = p['imageUrl'] as String?;
+      cBarres = p['codeBarres'] as String?;
     }
 
     String? clr;
@@ -45,6 +49,9 @@ class LigneVenteItem {
       final v = json['variante'] as Map<String, dynamic>;
       clr = v['couleur'] as String?;
       clrDesc = v['description'] as String?;
+      if (v['codeBarres'] != null && (v['codeBarres'] as String).isNotEmpty) {
+        cBarres = v['codeBarres'] as String?;
+      }
     }
 
     return LigneVenteItem(
@@ -54,6 +61,7 @@ class LigneVenteItem {
       nomProduit: nom,
       couleur: clr,
       couleurDescription: clrDesc,
+      codeBarres: cBarres,
       imageUrl: img,
       quantite: (json['quantite'] as num?)?.toInt() ?? 1,
       prixUnitaire: (json['prixUnitaire'] as num?)?.toDouble() ?? 0.0,
@@ -70,6 +78,7 @@ class LigneVenteItem {
       nom: nomProduit,
       couleur: couleur,
       couleurDescription: couleurDescription,
+      codeBarres: codeBarres,
       imageUrl: imageUrl,
       quantite: quantite,
       prixBase: prixUnitaire,

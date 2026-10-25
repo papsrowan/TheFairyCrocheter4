@@ -13,6 +13,7 @@ import '../providers/sales_history_provider.dart';
 import '../providers/terminal_settings_provider.dart';
 import '../services/scanner_service.dart';
 import '../services/printer_service.dart';
+import '../services/api_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/universal_scanner_listener.dart';
 import '../widgets/product_card.dart';
@@ -246,7 +247,14 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _printQuickReceipt(VenteItem sale, AuthProvider auth, TerminalSettingsProvider settings) async {
-    final receiptData = sale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
+    VenteItem freshSale = sale;
+    if (sale.lignes.any((l) => l.codeBarres == null || l.codeBarres!.isEmpty)) {
+      try {
+        final api = context.read<ApiService>();
+        freshSale = await api.getSaleDetails(sale.id);
+      } catch (_) {}
+    }
+    final receiptData = freshSale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
     try {
       final ok = await PrinterService.printReceiptSmart(receiptData, mode: settings.printerMode);
       if (mounted) {
@@ -290,11 +298,12 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
           title: Row(
             children: [
               Image.asset(
-                'assets/icon/app_icon.png',
-                width: 28,
-                height: 28,
+                'assets/images/logo.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => const Icon(
-                  Icons.shopping_bag,
+                  Icons.storefront_rounded,
                   color: AppTheme.primaryColor,
                   size: 24,
                 ),

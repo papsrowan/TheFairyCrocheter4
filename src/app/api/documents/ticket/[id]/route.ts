@@ -33,6 +33,7 @@ export async function GET(
         lignes: {
           include: {
             produit: { select: { nom: true, codeBarres: true } },
+            variante: { select: { codeBarres: true } },
           },
         },
       },
@@ -42,13 +43,28 @@ export async function GET(
 
   if (!vente)
     return NextResponse.json({ error: "Vente introuvable" }, { status: 404 });
-  const entrepriseFinal = entreprise ?? {
-    nom: "The Fairy Crocheter", adresse: "", codePostal: "", ville: "",
-    telephone: null, piedPageFacture: "Merci de votre confiance.",
+  const entrepriseFinal = {
+    nom: entreprise?.nom || "THE FAIRY CROCHETER",
+    adresse: "Akwa à la borne fontaine bebe-eyidi face la clinique le gros chêne.",
+    codePostal: "15521",
+    ville: "Douala",
+    telephone: "+237 676996717",
+    piedPageFacture: entreprise?.piedPageFacture ?? "Merci pour votre confiance",
+  };
+
+  const venteFormatee = {
+    ...vente,
+    lignes: vente.lignes.map((l) => ({
+      ...l,
+      produit: {
+        ...l.produit,
+        codeBarres: l.variante?.codeBarres || l.produit.codeBarres,
+      },
+    })),
   };
 
   try {
-    const element = createElement(TicketPDF, { vente, entreprise: entrepriseFinal }) as ReactElement<DocumentProps>;
+    const element = createElement(TicketPDF, { vente: venteFormatee, entreprise: entrepriseFinal }) as ReactElement<DocumentProps>;
     const buf = await renderToBuffer(element);
 
     return new NextResponse(new Uint8Array(buf), {

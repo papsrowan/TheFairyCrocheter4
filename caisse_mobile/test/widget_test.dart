@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:caisse_mobile/models/cart_item.dart';
 import 'package:caisse_mobile/models/product.dart';
 import 'package:caisse_mobile/models/client.dart';
 import 'package:caisse_mobile/providers/cart_provider.dart';
+import 'package:caisse_mobile/providers/auth_provider.dart';
+import 'package:caisse_mobile/providers/terminal_settings_provider.dart';
+import 'package:caisse_mobile/services/storage_service.dart';
+import 'package:caisse_mobile/services/scanner_service.dart';
+import 'package:caisse_mobile/services/api_service.dart';
+import 'package:caisse_mobile/screens/settings_screen.dart';
+import 'package:caisse_mobile/services/printer_service.dart';
 import 'package:caisse_mobile/widgets/cash_drawer_pin_dialog.dart';
 
 void main() {
@@ -119,6 +128,78 @@ void main() {
       expect(find.text('Tiroir-Caisse (RJ12)'), findsOneWidget);
       expect(find.text('Open cash box (Ouvrir)'), findsOneWidget);
       expect(find.text('Hardware Cashbox'), findsOneWidget);
+    });
+
+    testWidgets('SettingsScreen se construit sans écran blanc', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = StorageService();
+      await storage.init();
+      final scanner = ScannerService();
+      final api = ApiService(storageService: storage);
+      final auth = AuthProvider(apiService: api, storageService: storage);
+      final settings = TerminalSettingsProvider(storageService: storage, scannerService: scanner);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: auth),
+            ChangeNotifierProvider.value(value: settings),
+            Provider.value(value: api),
+          ],
+          child: const MaterialApp(
+            home: SettingsScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Vérifier que les sections de réglages sont bien affichées (pas d'écran blanc)
+      expect(find.text('Paramètres du Terminal'), findsOneWidget);
+      expect(find.text('Connexion Serveur'), findsOneWidget);
+      expect(find.text('Imprimante Thermique (58 mm)'), findsOneWidget);
+      expect(find.text('Tiroir-Caisse (Câble RJ12)'), findsOneWidget);
+    });
+
+    test('PrinterService.cleanItemTitle retire strictement tout détail ou parenthèse de couleur', () {
+      final itemHex = CartItem(
+        produitId: 'p1',
+        nom: 'Pelote Coton',
+        couleur: '#C1683E',
+        prixBase: 2000,
+        tauxTVA: 0,
+        stockDisponible: 10,
+      );
+      expect(PrinterService.cleanItemTitle(itemHex), 'Pelote Coton');
+
+      final itemDesc = CartItem(
+        produitId: 'p2',
+        nom: 'Pelote Coton (Terracotta chaud)',
+        couleur: '#C1683E',
+        couleurDescription: 'Terracotta chaud',
+        prixBase: 2000,
+        tauxTVA: 0,
+        stockDisponible: 10,
+      );
+      expect(PrinterService.cleanItemTitle(itemDesc), 'Pelote Coton');
+
+      final itemNomHex = CartItem(
+        produitId: 'p3',
+        nom: 'Top Dentelle (#FF0000)',
+        prixBase: 5000,
+        tauxTVA: 0,
+        stockDisponible: 5,
+      );
+      expect(PrinterService.cleanItemTitle(itemNomHex), 'Top Dentelle');
+
+      final itemNomCouleur = CartItem(
+        produitId: 'p4',
+        nom: 'Pelote Laine Velours (Bleu Canard)',
+        prixBase: 3000,
+        tauxTVA: 0,
+        stockDisponible: 5,
+      );
+      expect(PrinterService.cleanItemTitle(itemNomCouleur), 'Pelote Laine Velours');
     });
   });
 }

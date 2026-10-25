@@ -110,20 +110,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await settings.setBaseUrl(_urlCtrl.text);
-                      if (context.mounted) {
-                        context.read<ApiService>().updateBaseUrl();
-                      }
-                      FeedbackService.scanSuccess();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('URL du serveur mise à jour !')),
-                        );
-                      }
-                    },
-                    child: const Text('Enregistrer l\'URL'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await settings.setBaseUrl(_urlCtrl.text);
+                        if (context.mounted) {
+                          context.read<ApiService>().updateBaseUrl();
+                        }
+                        FeedbackService.scanSuccess();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('URL du serveur mise à jour !')),
+                          );
+                        }
+                      },
+                      child: const Text('Enregistrer l\'URL'),
+                    ),
                   ),
                 ],
               ),
@@ -140,13 +143,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SwitchListTile(
-                    title: const Text('Impression automatique', style: TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: const Text('Lancer l\'impression dès validation de la vente'),
-                    value: settings.autoPrint,
-                    activeThumbColor: AppTheme.primaryColor,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) => settings.setAutoPrint(val),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Impression automatique', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SizedBox(height: 2),
+                            Text(
+                              'Lancer l\'impression dès validation de la vente',
+                              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: settings.autoPrint,
+                        activeThumbColor: AppTheme.primaryColor,
+                        onChanged: (val) => settings.setAutoPrint(val),
+                      ),
+                    ],
                   ),
                   const Divider(),
                   const SizedBox(height: 6),
@@ -183,39 +201,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SwitchListTile(
-                    title: const Text('Ouverture auto (Espèces)', style: TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: const Text('Ouvrir le tiroir automatiquement lors de la validation d\'un règlement en espèces'),
-                    value: settings.autoOpenDrawer,
-                    activeThumbColor: AppTheme.primaryColor,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) => settings.setAutoOpenDrawer(val),
+                  // Ouverture auto
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Ouverture auto (Espèces)', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SizedBox(height: 2),
+                            Text(
+                              'Ouvrir le tiroir automatiquement lors d\'un règlement en espèces',
+                              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: settings.autoOpenDrawer,
+                        activeThumbColor: AppTheme.primaryColor,
+                        onChanged: (val) => settings.setAutoOpenDrawer(val),
+                      ),
+                    ],
                   ),
                   const Divider(),
-                  SwitchListTile(
-                    title: const Text('Code PIN de sécurité', style: TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: const Text('Exiger un code PIN pour toute ouverture manuelle hors vente'),
-                    value: settings.requireDrawerPin,
-                    activeThumbColor: AppTheme.primaryColor,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) => settings.setRequireDrawerPin(val),
+                  // Code PIN requis
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Code PIN de sécurité', style: TextStyle(fontWeight: FontWeight.w700)),
+                            SizedBox(height: 2),
+                            Text(
+                              'Exiger le code PIN pour toute ouverture manuelle hors vente',
+                              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: settings.requireDrawerPin,
+                        activeThumbColor: AppTheme.primaryColor,
+                        onChanged: (val) => settings.setRequireDrawerPin(val),
+                      ),
+                    ],
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.pin_outlined, color: AppTheme.primaryColor),
-                    title: const Text('Code PIN actuel', style: TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text('Code configuré : ${settings.cashDrawerPin.replaceAll(RegExp(r'.'), '•')} (Par défaut : 123456 - Style Hardware Manager)'),
-                    trailing: OutlinedButton(
-                      onPressed: () => _showChangePinDialog(context, settings),
-                      child: const Text('Modifier PIN'),
+                  const Divider(),
+                  // Modifier le code PIN
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.pin_outlined, color: AppTheme.primaryColor),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Code PIN actuel', style: TextStyle(fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Code : ${settings.cashDrawerPin.replaceAll(RegExp(r'.'), '•')} (Par défaut : 123456)',
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () => _showChangePinDialog(context, settings),
+                          child: const Text('Modifier PIN'),
+                        ),
+                      ],
                     ),
                   ),
                   const Divider(),
                   const SizedBox(height: 6),
-                  OutlinedButton.icon(
-                    onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
-                    icon: const Icon(Icons.point_of_sale),
-                    label: const Text('Tester l\'ouverture sécurisée du tiroir-caisse'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
+                      icon: const Icon(Icons.point_of_sale),
+                      label: const Text('Tester l\'ouverture sécurisée du tiroir-caisse'),
+                    ),
                   ),
                 ],
               ),
@@ -257,16 +330,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  OutlinedButton(
-                    onPressed: () async {
-                      await settings.setCustomIntentAction(_intentCtrl.text);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Action Intent configurée !')),
-                        );
-                      }
-                    },
-                    child: const Text('Appliquer l\'action Intent'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await settings.setCustomIntentAction(_intentCtrl.text);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Action Intent configurée !')),
+                          );
+                        }
+                      },
+                      child: const Text('Appliquer l\'action Intent'),
+                    ),
                   ),
                 ],
               ),
@@ -304,29 +380,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.secondaryColor,
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.secondaryColor,
+                      ),
+                      onPressed: settings.offlineQueueCount == 0 || settings.isSyncing
+                          ? null
+                          : () async {
+                              final api = context.read<ApiService>();
+                              final ok = await settings.syncOfflineQueue(api);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ok
+                                        ? 'Synchronisation réussie !'
+                                        : 'Échec de synchronisation. Vérifiez la connexion.'),
+                                  ),
+                                );
+                              }
+                            },
+                      icon: settings.isSyncing
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.sync),
+                      label: Text(settings.isSyncing ? 'Synchronisation...' : 'Synchroniser les ventes'),
                     ),
-                    onPressed: settings.offlineQueueCount == 0 || settings.isSyncing
-                        ? null
-                        : () async {
-                            final api = context.read<ApiService>();
-                            final ok = await settings.syncOfflineQueue(api);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(ok
-                                      ? 'Synchronisation réussie !'
-                                      : 'Échec de synchronisation. Vérifiez la connexion.'),
-                                ),
-                              );
-                            }
-                          },
-                    icon: settings.isSyncing
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Icon(Icons.sync),
-                    label: Text(settings.isSyncing ? 'Synchronisation...' : 'Synchroniser les ventes'),
                   ),
                 ],
               ),
@@ -339,21 +418,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (auth.user != null) ...[
             _buildSectionHeader('Session Caissier'),
             Card(
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: AppTheme.primaryLight,
-                  child: Icon(Icons.person, color: AppTheme.primaryColor),
-                ),
-                title: Text(auth.user!.nomComplet, style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('${auth.user!.email} • Rôle : ${auth.user!.role}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.logout, color: AppTheme.errorColor),
-                  onPressed: () async {
-                    await auth.logout();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
-                  },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: AppTheme.primaryLight,
+                      child: Icon(Icons.person, color: AppTheme.primaryColor),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(auth.user!.nomComplet, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${auth.user!.email} • Rôle : ${auth.user!.role}',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: AppTheme.errorColor),
+                      onPressed: () async {
+                        await auth.logout();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),

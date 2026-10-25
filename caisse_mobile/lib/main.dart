@@ -12,11 +12,13 @@ import 'providers/catalog_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/terminal_settings_provider.dart';
 import 'providers/sales_history_provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/login_screen.dart';
 import 'screens/pos_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR', null);
 
   // Bloquer l'orientation en portrait pour les terminaux de poche POS
   await SystemChrome.setPreferredOrientations([

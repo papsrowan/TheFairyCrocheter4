@@ -35,8 +35,28 @@ class _SaleSuccessScreenState extends State<SaleSuccessScreen> {
   Future<void> _printTicket() async {
     if (_isPrinting) return;
     setState(() => _isPrinting = true);
-    await PrinterService.printReceiptSmart(widget.receiptData);
-    if (mounted) setState(() => _isPrinting = false);
+    try {
+      final ok = await PrinterService.printReceiptNative(widget.receiptData);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impression annulée ou indisponible.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur : $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
   }
 
   void _finishAndNewSale() {
