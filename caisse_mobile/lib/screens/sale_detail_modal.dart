@@ -29,7 +29,7 @@ class _SaleDetailModalState extends State<SaleDetailModal> {
     final receiptData = widget.sale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
 
     try {
-      final success = await PrinterService.printReceiptNative(receiptData);
+      final success = await PrinterService.printReceiptSmart(receiptData);
 
       if (mounted) {
         setState(() => _isPrinting = false);

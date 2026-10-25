@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
 import '../services/cash_drawer_service.dart';
+import '../widgets/cash_drawer_pin_dialog.dart';
 import '../widgets/quick_cash_pad.dart';
 import 'client_search_modal.dart';
 import 'sale_success_screen.dart';
@@ -628,18 +629,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                           ),
-                          onPressed: () async {
-                            final ok = await CashDrawerService.openDrawer();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(ok ? 'Tiroir-caisse ouvert !' : 'Commande tiroir envoyée.'),
-                                  duration: const Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
+                          onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
                           icon: const Icon(Icons.point_of_sale, size: 15, color: AppTheme.primaryColor),
                           label: const Text('Ouvrir tiroir', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),

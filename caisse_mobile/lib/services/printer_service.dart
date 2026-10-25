@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -34,17 +35,53 @@ class ReceiptData {
 }
 
 class PrinterService {
+  static const MethodChannel _nativeChannel =
+      MethodChannel('com.thefairycrocheter.pos/scanner_config');
+
+  /// ─── IMPRESSION HARDWARE DIRECTE (PORTS SÉRIES ESC/POS / DEV / BROADCAST) ───
+  /// Envoie le flux d'octets ESC/POS directement aux périphériques thermiques internes
+  static Future<bool> printReceiptDirectHardware(ReceiptData data) async {
+    try {
+      final bytes = await generateEscPos58(data);
+      final res = await _nativeChannel.invokeMethod<bool>(
+        'printRawEscPos',
+        {'bytes': Uint8List.fromList(bytes)},
+      );
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// ─── IMPRESSION UNIFIÉE INTELLIGENTE (AUTO HARDWARE -> FALLBACK SPOOLER) ────
+  static Future<bool> printReceiptSmart(ReceiptData data, {String? mode}) async {
+    // 1. Tenter d'abord l'impression matérielle directe (ESC/POS immédiat)
+    if (mode == null || mode == 'esc_pos') {
+      final hwOk = await printReceiptDirectHardware(data);
+      if (hwOk) return true;
+    }
+
+    // 2. Fallback ou mode sélectionné : Spooler Android corrigé (hauteur finie)
+    return await printReceiptNative(data);
+  }
+
   // ─── IMPRESSION ANDROID DIRECTE (SPOOLER / SERVICE SYSTÈME) ─────────────────
-  // Imprime sur l'imprimante thermique par défaut du terminal POS Android
+  // Imprime sur l'imprimante thermique par défaut du terminal POS Android (localPrinter)
   static Future<bool> printReceiptNative(ReceiptData data) async {
     try {
       final doc = pw.Document();
 
-      // Largeur standard rouleau 58mm = 58 * 72 / 25.4 ≈ 164 points (marge 4 points)
-      const pageFormat = PdfPageFormat(
+      // Hauteur finie calculée pour éviter le crash 'double.infinity' sur localPrinter
+      final double calculatedHeightMm = (90.0 +
+              (data.items.length * 15.0) +
+              (data.remiseGlobale > 0 ? 15.0 : 0.0) +
+              (data.montantRecu != null ? 20.0 : 0.0))
+          .clamp(120.0, 500.0);
+
+      final pageFormat = PdfPageFormat(
         58 * PdfPageFormat.mm,
-        double.infinity,
-        marginAll: 3 * PdfPageFormat.mm,
+        calculatedHeightMm * PdfPageFormat.mm,
+        marginAll: 2 * PdfPageFormat.mm,
       );
 
       doc.addPage(

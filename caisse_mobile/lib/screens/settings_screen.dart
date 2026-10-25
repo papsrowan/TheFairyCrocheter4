@@ -6,8 +6,7 @@ import '../providers/terminal_settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/printer_service.dart';
 import '../services/feedback_service.dart';
-
-import '../services/cash_drawer_service.dart';
+import '../widgets/cash_drawer_pin_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,9 +23,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    final settings = context.read<TerminalSettingsProvider>();
-    _urlCtrl.text = settings.baseUrl;
-    _intentCtrl.text = settings.customIntentAction;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final settings = context.read<TerminalSettingsProvider>();
+        _urlCtrl.text = settings.baseUrl;
+        _intentCtrl.text = settings.customIntentAction;
+      }
+    });
   }
 
   @override
@@ -53,11 +56,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _isTestingPrint = false);
   }
 
+  Future<void> _testPrintHardware() async {
+    setState(() => _isTestingPrint = true);
+    final testReceipt = ReceiptData(
+      numeroVente: 'TEST-ESC-01',
+      date: DateTime.now(),
+      caissierNom: 'Test Direct',
+      clientNom: 'Client Test',
+      items: [],
+      sousTotal: 1000,
+      remiseGlobale: 0,
+      total: 1000,
+      modePaiement: 'ESPECES',
+    );
+    final ok = await PrinterService.printReceiptDirectHardware(testReceipt);
+    if (mounted) {
+      setState(() => _isTestingPrint = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'Impression matérielle directe envoyée !' : 'Commande matérielle envoyée (Vérifiez le rouleau).'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final settings = context.watch<TerminalSettingsProvider>();
-    final apiService = context.read<ApiService>();
 
     return Scaffold(
       appBar: AppBar(
@@ -86,7 +113,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ElevatedButton(
                     onPressed: () async {
                       await settings.setBaseUrl(_urlCtrl.text);
-                      apiService.updateBaseUrl();
+                      if (context.mounted) {
+                        context.read<ApiService>().updateBaseUrl();
+                      }
                       FeedbackService.scanSuccess();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -121,12 +150,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(),
                   const SizedBox(height: 6),
-                  OutlinedButton.icon(
-                    onPressed: _isTestingPrint ? null : _testPrint,
-                    icon: _isTestingPrint
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.print),
-                    label: const Text('Imprimer un ticket de test'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isTestingPrint ? null : _testPrint,
+                        icon: _isTestingPrint
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.print),
+                        label: const Text('Test Système (Spooler Android)'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _isTestingPrint ? null : _testPrintHardware,
+                        icon: const Icon(Icons.flash_on, color: AppTheme.primaryColor),
+                        label: const Text('Test Matériel Direct (ESC/POS)'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -152,28 +192,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (val) => settings.setAutoOpenDrawer(val),
                   ),
                   const Divider(),
+                  SwitchListTile(
+                    title: const Text('Code PIN de sécurité', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: const Text('Exiger un code PIN pour toute ouverture manuelle hors vente'),
+                    value: settings.requireDrawerPin,
+                    activeThumbColor: AppTheme.primaryColor,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) => settings.setRequireDrawerPin(val),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.pin_outlined, color: AppTheme.primaryColor),
+                    title: const Text('Code PIN actuel', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text('Code configuré : ${settings.cashDrawerPin.replaceAll(RegExp(r'.'), '•')} (Par défaut : 123456 - Style Hardware Manager)'),
+                    trailing: OutlinedButton(
+                      onPressed: () => _showChangePinDialog(context, settings),
+                      child: const Text('Modifier PIN'),
+                    ),
+                  ),
+                  const Divider(),
                   const SizedBox(height: 6),
                   OutlinedButton.icon(
-                    onPressed: () async {
-                      final ok = await CashDrawerService.openDrawer();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                Icon(ok ? Icons.check_circle : Icons.info_outline, color: Colors.white, size: 20),
-                                const SizedBox(width: 8),
-                                Text(ok ? 'Signal d\'ouverture RJ12 envoyé !' : 'Commande d\'ouverture envoyée.'),
-                              ],
-                            ),
-                            backgroundColor: AppTheme.secondaryColor,
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
                     icon: const Icon(Icons.point_of_sale),
-                    label: const Text('Tester l\'ouverture du tiroir-caisse (RJ12)'),
+                    label: const Text('Tester l\'ouverture sécurisée du tiroir-caisse'),
                   ),
                 ],
               ),
@@ -269,7 +311,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: settings.offlineQueueCount == 0 || settings.isSyncing
                         ? null
                         : () async {
-                            final ok = await settings.syncOfflineQueue(apiService);
+                            final api = context.read<ApiService>();
+                            final ok = await settings.syncOfflineQueue(api);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -334,6 +377,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
           letterSpacing: 0.5,
         ),
       ),
+    );
+  }
+
+  void _showChangePinDialog(BuildContext context, TerminalSettingsProvider settings) {
+    final pinController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.password, color: AppTheme.primaryColor),
+              SizedBox(width: 8),
+              Text('Modifier le Code PIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Définissez un code PIN à 4 ou 6 chiffres pour sécuriser l\'accès manuel au tiroir-caisse.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pinController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Nouveau Code PIN',
+                  hintText: 'Ex: 123456',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newPin = pinController.text.trim();
+                if (newPin.length < 4) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Le code PIN doit comporter au moins 4 chiffres.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+                await settings.setCashDrawerPin(newPin);
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Code PIN mis à jour avec succès !'),
+                      backgroundColor: AppTheme.secondaryColor,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

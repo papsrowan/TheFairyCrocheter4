@@ -51,6 +51,15 @@ class MainActivity : FlutterActivity() {
                     val opened = openPhysicalCashDrawer()
                     result.success(opened)
                 }
+                "printRawEscPos" -> {
+                    val bytes = call.argument<ByteArray>("bytes")
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        val printed = printDirectHardware(bytes)
+                        result.success(printed)
+                    } else {
+                        result.error("EMPTY_DATA", "Bytes cannot be null or empty", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -155,12 +164,15 @@ class MainActivity : FlutterActivity() {
     private fun openPhysicalCashDrawer(): Boolean {
         var success = false
 
-        // 1. Broadcasts Android standards pour tiroir-caisse RJ12 / POS
+        // 1. Broadcasts Android standards & constructeurs POS (ZCS, Sunmi, Urovo, iMin, etc.)
         val drawerActions = listOf(
-            "android.intent.action.CASH_DRAWER",
-            "com.pos.drawer.open",
-            "com.sunmi.action.CASH_DRAWER_OPEN",
+            "com.zcs.action.OPEN_DRAWER",
+            "com.zcs.action.CASH_BOX",
             "action.open.cashbox",
+            "com.pos.drawer.open",
+            "com.pos.action.CASHBOX_OPEN",
+            "android.intent.action.CASH_DRAWER",
+            "com.sunmi.action.CASH_DRAWER_OPEN",
             "com.imin.action.OPEN_DRAWER",
             "com.urovo.cashdrawer.OPEN",
             "device.action.OPEN_DRAWER",
@@ -174,22 +186,81 @@ class MainActivity : FlutterActivity() {
             } catch (_: Exception) {}
         }
 
-        // 2. Écriture directe des octets ESC/POS (ESC p 0 25 250) sur les nœuds de périphériques tiroir / port série
+        // 2. Écriture directe des octets ESC/POS (Pin 2, Pin 5 et Real-time) sur les nœuds périphériques & ports séries
         val candidateDevices = listOf(
             "/dev/cash_drawer",
             "/dev/cashbox",
             "/dev/drawer",
+            "/dev/ttyMT0",
             "/dev/ttyMT1",
             "/dev/ttyMT2",
-            "/dev/ttyS1"
+            "/dev/ttyS0",
+            "/dev/ttyS1",
+            "/dev/ttyUSB0",
+            "/dev/printer",
+            "/dev/usb/lp0"
         )
-        val kickBytes = byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte())
+        // Combinaison des impulsions standards RJ12 : Pin 2 (0x00), Pin 5 (0x01) et Real-time kick (0x10, 0x14)
+        val kickBytes = byteArrayOf(
+            0x1B, 0x70, 0x00, 0x19, 0xFA.toByte(), // ESC p 0 25 250
+            0x1B, 0x70, 0x01, 0x19, 0xFA.toByte(), // ESC p 1 25 250
+            0x10, 0x14, 0x01, 0x00, 0x05            // DLE DC4 1 0 5
+        )
         for (devPath in candidateDevices) {
             try {
                 val file = java.io.File(devPath)
                 if (file.exists() && file.canWrite()) {
                     val fos = java.io.FileOutputStream(file)
                     fos.write(kickBytes)
+                    fos.flush()
+                    fos.close()
+                    success = true
+                }
+            } catch (_: Exception) {}
+        }
+
+        return success
+    }
+
+    private fun printDirectHardware(bytes: ByteArray): Boolean {
+        var success = false
+
+        // 1. Broadcasts d'impression standards POS (ZCS, Sunmi, Urovo, etc.)
+        val printIntents = listOf(
+            "com.pos.action.PRINT",
+            "net.nyx.printerservice.PRINT_RAW_DATA",
+            "com.sunmi.action.PRINT_DATA",
+            "android.intent.action.PRINT_DATA",
+            "com.zcs.action.PRINT"
+        )
+        for (action in printIntents) {
+            try {
+                val intent = Intent(action)
+                intent.putExtra("data", bytes)
+                intent.putExtra("bytes", bytes)
+                sendBroadcast(intent)
+                success = true
+            } catch (_: Exception) {}
+        }
+
+        // 2. Écriture directe sur les ports séries et périphériques d'impression thermique interne
+        val candidatePorts = listOf(
+            "/dev/ttyMT1",
+            "/dev/ttyMT0",
+            "/dev/ttyMT2",
+            "/dev/ttyS1",
+            "/dev/ttyS0",
+            "/dev/ttyS2",
+            "/dev/ttyUSB0",
+            "/dev/printer",
+            "/dev/usb/lp0"
+        )
+        for (portPath in candidatePorts) {
+            try {
+                val file = java.io.File(portPath)
+                if (file.exists() && file.canWrite()) {
+                    val fos = java.io.FileOutputStream(file)
+                    fos.write(bytes)
                     fos.flush()
                     fos.close()
                     success = true

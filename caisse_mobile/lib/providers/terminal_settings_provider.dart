@@ -10,6 +10,8 @@ class TerminalSettingsProvider extends ChangeNotifier {
   late String _baseUrl;
   late bool _autoPrint;
   late bool _autoOpenDrawer;
+  late String _cashDrawerPin;
+  late bool _requireDrawerPin;
   late String _printerMode;
   late String _scannerMode;
   late String _customIntentAction;
@@ -19,6 +21,8 @@ class TerminalSettingsProvider extends ChangeNotifier {
   String get baseUrl => _baseUrl;
   bool get autoPrint => _autoPrint;
   bool get autoOpenDrawer => _autoOpenDrawer;
+  String get cashDrawerPin => _cashDrawerPin;
+  bool get requireDrawerPin => _requireDrawerPin;
   String get printerMode => _printerMode;
   String get scannerMode => _scannerMode;
   String get customIntentAction => _customIntentAction;
@@ -36,6 +40,8 @@ class TerminalSettingsProvider extends ChangeNotifier {
     _baseUrl = storageService.getBaseUrl();
     _autoPrint = storageService.getAutoPrint();
     _autoOpenDrawer = storageService.getAutoOpenDrawer();
+    _cashDrawerPin = storageService.getCashDrawerPin();
+    _requireDrawerPin = storageService.getRequireDrawerPin();
     _printerMode = storageService.getPrinterMode();
     _scannerMode = storageService.getScannerMode();
     _customIntentAction = storageService.getCustomIntentAction();
@@ -62,6 +68,18 @@ class TerminalSettingsProvider extends ChangeNotifier {
   Future<void> setAutoOpenDrawer(bool val) async {
     _autoOpenDrawer = val;
     await storageService.setAutoOpenDrawer(val);
+    notifyListeners();
+  }
+
+  Future<void> setCashDrawerPin(String pin) async {
+    _cashDrawerPin = pin.trim();
+    await storageService.setCashDrawerPin(_cashDrawerPin);
+    notifyListeners();
+  }
+
+  Future<void> setRequireDrawerPin(bool val) async {
+    _requireDrawerPin = val;
+    await storageService.setRequireDrawerPin(val);
     notifyListeners();
   }
 

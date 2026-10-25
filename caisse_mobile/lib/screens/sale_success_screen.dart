@@ -35,7 +35,7 @@ class _SaleSuccessScreenState extends State<SaleSuccessScreen> {
   Future<void> _printTicket() async {
     if (_isPrinting) return;
     setState(() => _isPrinting = true);
-    await PrinterService.printReceiptNative(widget.receiptData);
+    await PrinterService.printReceiptSmart(widget.receiptData);
     if (mounted) setState(() => _isPrinting = false);
   }
 

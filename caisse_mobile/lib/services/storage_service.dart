@@ -13,6 +13,8 @@ class StorageService {
   static const String keyCustomIntentAction = 'pos_custom_intent_action';
   static const String keyOfflineQueue = 'pos_offline_sales_queue';
   static const String keyAutoOpenDrawer = 'pos_auto_open_drawer';
+  static const String keyCashDrawerPin = 'pos_cash_drawer_pin';
+  static const String keyRequireDrawerPin = 'pos_require_drawer_pin';
 
   late SharedPreferences _prefs;
 
@@ -67,6 +69,12 @@ class StorageService {
 
   bool getAutoOpenDrawer() => _prefs.getBool(keyAutoOpenDrawer) ?? true;
   Future<void> setAutoOpenDrawer(bool val) => _prefs.setBool(keyAutoOpenDrawer, val);
+
+  String getCashDrawerPin() => _prefs.getString(keyCashDrawerPin) ?? '123456';
+  Future<void> setCashDrawerPin(String pin) => _prefs.setString(keyCashDrawerPin, pin.trim());
+
+  bool getRequireDrawerPin() => _prefs.getBool(keyRequireDrawerPin) ?? true;
+  Future<void> setRequireDrawerPin(bool val) => _prefs.setBool(keyRequireDrawerPin, val);
 
   String getPrinterMode() => _prefs.getString(keyPrinterMode) ?? 'android_spooler';
   Future<void> setPrinterMode(String mode) => _prefs.setString(keyPrinterMode, mode);

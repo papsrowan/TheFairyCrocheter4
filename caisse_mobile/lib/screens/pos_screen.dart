@@ -13,7 +13,6 @@ import '../providers/sales_history_provider.dart';
 import '../providers/terminal_settings_provider.dart';
 import '../services/scanner_service.dart';
 import '../services/printer_service.dart';
-import '../services/cash_drawer_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/universal_scanner_listener.dart';
 import '../widgets/product_card.dart';
@@ -23,6 +22,7 @@ import 'client_search_modal.dart';
 import 'checkout_dialog.dart';
 import 'sale_detail_modal.dart';
 import 'settings_screen.dart';
+import '../widgets/cash_drawer_pin_dialog.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -248,7 +248,7 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
   Future<void> _printQuickReceipt(VenteItem sale, AuthProvider auth, TerminalSettingsProvider settings) async {
     final receiptData = sale.toReceiptData(auth.user?.nomComplet ?? 'Caisse');
     try {
-      final ok = await PrinterService.printReceiptNative(receiptData);
+      final ok = await PrinterService.printReceiptSmart(receiptData, mode: settings.printerMode);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -338,29 +338,11 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
               ),
             ),
 
-            // Bouton Tiroir-Caisse rapide (RJ12)
+            // Bouton Tiroir-Caisse sécurisé par code PIN (RJ12)
             IconButton(
-              tooltip: 'Ouvrir tiroir-caisse (RJ12)',
+              tooltip: 'Ouvrir tiroir-caisse (Sécurisé)',
               icon: const Icon(Icons.point_of_sale_outlined),
-              onPressed: () async {
-                final ok = await CashDrawerService.openDrawer();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          Icon(ok ? Icons.check_circle : Icons.info_outline, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          Text(ok ? 'Tiroir-caisse ouvert !' : 'Commande d\'ouverture envoyée.'),
-                        ],
-                      ),
-                      backgroundColor: AppTheme.secondaryColor,
-                      duration: const Duration(seconds: 1),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              },
+              onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
             ),
 
             // Paramètres

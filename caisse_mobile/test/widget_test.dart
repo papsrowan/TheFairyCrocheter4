@@ -1,8 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:caisse_mobile/models/cart_item.dart';
 import 'package:caisse_mobile/models/product.dart';
 import 'package:caisse_mobile/models/client.dart';
 import 'package:caisse_mobile/providers/cart_provider.dart';
+import 'package:caisse_mobile/widgets/cash_drawer_pin_dialog.dart';
 
 void main() {
   group('POS Unit Tests - The Fairy Crocheter', () {
@@ -86,6 +88,37 @@ void main() {
       expect(cart.items.isEmpty, true);
       expect(cart.total, 0.0);
       expect(cart.client, null);
+    });
+
+    testWidgets('CashDrawerPinDialog se construit avec 6 cases et pavé numérique', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const CashDrawerPinDialog(),
+                    );
+                  },
+                  child: const Text('Ouvrir'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Ouvrir le dialogue
+      await tester.tap(find.text('Ouvrir'));
+      await tester.pumpAndSettle();
+
+      // Vérifier le titre et le bouton style Hardware Manager
+      expect(find.text('Tiroir-Caisse (RJ12)'), findsOneWidget);
+      expect(find.text('Open cash box (Ouvrir)'), findsOneWidget);
+      expect(find.text('Hardware Cashbox'), findsOneWidget);
     });
   });
 }
