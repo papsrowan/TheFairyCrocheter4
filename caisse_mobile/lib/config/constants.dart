@@ -2,7 +2,7 @@ class AppConstants {
   // Par défaut, l'adresse du serveur local ou de production
   // Le caissier peut la modifier dans les paramètres du terminal
   static const String defaultBaseUrl = 'https://thefairycrocheter.fr';
-  static const String appTitle = 'The Fairy Crocheter POS';
+  static const String appTitle = 'TFC Caisse';
   static const String currency = 'XAF';
 
   // Format monétaire pour FCFA / XAF (ex: "15 000 XAF")

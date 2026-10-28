@@ -74,28 +74,36 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Logo & Titre
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryLight,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3), width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.point_of_sale,
-                    size: 38,
-                    color: AppTheme.primaryColor,
+                Center(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 90,
+                    height: 90,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryLight,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3), width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.point_of_sale,
+                        size: 38,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 const Text(
                   'The Fairy Crocheter',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.textPrimary,
                     letterSpacing: -0.5,
@@ -105,12 +113,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 4),
 
                 const Text(
-                  'Terminal de Caisse & Vente',
+                  'TFC Caisse',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryColor,
+                    letterSpacing: 0.5,
                   ),
                 ),
 
