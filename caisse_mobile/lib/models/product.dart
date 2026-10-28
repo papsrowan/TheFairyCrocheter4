@@ -23,6 +23,22 @@ class VarianteCouleur {
     );
   }
 
+  VarianteCouleur copyWith({
+    String? id,
+    String? couleur,
+    String? description,
+    String? codeBarres,
+    int? stockActuel,
+  }) {
+    return VarianteCouleur(
+      id: id ?? this.id,
+      couleur: couleur ?? this.couleur,
+      description: description ?? this.description,
+      codeBarres: codeBarres ?? this.codeBarres,
+      stockActuel: stockActuel ?? this.stockActuel,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'couleur': couleur,
@@ -149,6 +165,40 @@ class Product {
       categorieNom: catName,
       variantes: vars,
       paliers: pals,
+    );
+  }
+
+  Product copyWith({
+    String? id,
+    String? nom,
+    String? description,
+    String? codeBarres,
+    double? prixVente,
+    double? prixGros,
+    int? qtePrixGros,
+    double? tauxTVA,
+    int? stockActuel,
+    int? stockMinimum,
+    String? imageUrl,
+    String? categorieNom,
+    List<VarianteCouleur>? variantes,
+    List<PalierPrix>? paliers,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      nom: nom ?? this.nom,
+      description: description ?? this.description,
+      codeBarres: codeBarres ?? this.codeBarres,
+      prixVente: prixVente ?? this.prixVente,
+      prixGros: prixGros ?? this.prixGros,
+      qtePrixGros: qtePrixGros ?? this.qtePrixGros,
+      tauxTVA: tauxTVA ?? this.tauxTVA,
+      stockActuel: stockActuel ?? this.stockActuel,
+      stockMinimum: stockMinimum ?? this.stockMinimum,
+      imageUrl: imageUrl ?? this.imageUrl,
+      categorieNom: categorieNom ?? this.categorieNom,
+      variantes: variantes ?? this.variantes,
+      paliers: paliers ?? this.paliers,
     );
   }
 

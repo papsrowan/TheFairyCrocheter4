@@ -71,6 +71,35 @@ class LigneVenteItem {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'produitId': produitId,
+    'varianteId': varianteId,
+    'nomProduit': nomProduit,
+    'couleur': couleur,
+    'couleurDescription': couleurDescription,
+    'codeBarres': codeBarres,
+    'imageUrl': imageUrl,
+    'quantite': quantite,
+    'prixUnitaire': prixUnitaire,
+    'remise': remise,
+    'tauxTVA': tauxTVA,
+    'total': total,
+    'produit': {
+      'id': produitId,
+      'nom': nomProduit,
+      'codeBarres': codeBarres,
+      'imageUrl': imageUrl,
+    },
+    if (varianteId != null)
+      'variante': {
+        'id': varianteId,
+        'couleur': couleur,
+        'description': couleurDescription,
+        'codeBarres': codeBarres,
+      },
+  };
+
   CartItem toCartItem() {
     return CartItem(
       produitId: produitId,
@@ -133,6 +162,7 @@ class VenteItem {
   bool get isCredit => modePaiement == 'CREDIT';
   bool get isPaye => statutPaiement == 'PAYE';
   bool get isAnnulee => statut == 'ANNULEE';
+  bool get isOfflinePending => statut == 'OFFLINE_PENDING' || id.startsWith('off_') || id.startsWith('offline_');
   double get resteDu => isCredit
       ? (total - (montantPaye ?? 0.0)).clamp(0.0, double.infinity)
       : 0.0;
@@ -194,6 +224,26 @@ class VenteItem {
       lignes: lignesList,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'numero': numero,
+    'createdAt': createdAt.toIso8601String(),
+    'dateFacture': dateFacture?.toIso8601String(),
+    'dateEcheance': dateEcheance?.toIso8601String(),
+    'statut': statut,
+    'statutPaiement': statutPaiement,
+    'modePaiement': modePaiement,
+    'sousTotal': sousTotal,
+    'remiseGlobale': remiseGlobale,
+    'montantTVA': montantTVA,
+    'total': total,
+    'montantPaye': montantPaye,
+    'notes': notes,
+    'client': clientNom != null ? {'nom': clientNom, 'telephone': clientTelephone} : null,
+    'vendeur': vendeurNom != null ? {'nom': vendeurNom, 'prenom': ''} : null,
+    'lignes': lignes.map((l) => l.toJson()).toList(),
+  };
 
   ReceiptData toReceiptData(String fallbackCaissier) {
     return ReceiptData(

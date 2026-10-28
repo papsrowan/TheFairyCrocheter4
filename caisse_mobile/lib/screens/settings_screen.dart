@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/terminal_settings_provider.dart';
+import '../providers/catalog_provider.dart';
+import '../providers/sales_history_provider.dart';
 import '../services/api_service.dart';
+import '../services/connectivity_sync_service.dart';
 import '../services/printer_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/cash_drawer_pin_dialog.dart';
@@ -19,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _urlCtrl = TextEditingController();
   final TextEditingController _intentCtrl = TextEditingController();
   bool _isTestingPrint = false;
+  bool _isCachingCatalog = false;
 
   @override
   void initState() {
@@ -209,10 +214,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Ouverture auto (Espèces)', style: TextStyle(fontWeight: FontWeight.w700)),
+                            Text('Ouverture automatique de la caisse', style: TextStyle(fontWeight: FontWeight.w700)),
                             SizedBox(height: 2),
                             Text(
-                              'Ouvrir le tiroir automatiquement lors d\'un règlement en espèces',
+                              'Déclencher l\'ouverture du tiroir automatiquement à chaque encaissement',
                               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                             ),
                           ],
@@ -263,10 +268,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Code PIN actuel', style: TextStyle(fontWeight: FontWeight.w600)),
+                              const Text('Code matériel de la caisse', style: TextStyle(fontWeight: FontWeight.w600)),
                               const SizedBox(height: 2),
                               Text(
-                                'Code : ${settings.cashDrawerPin.replaceAll(RegExp(r'.'), '•')} (Par défaut : 123456)',
+                                'Code fabricant : ${settings.cashDrawerPin}',
                                 style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                               ),
                             ],
@@ -275,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: () => _showChangePinDialog(context, settings),
-                          child: const Text('Modifier PIN'),
+                          child: const Text('Modifier'),
                         ),
                       ],
                     ),
@@ -352,17 +357,122 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 18),
 
           // Section File d'attente Hors-Ligne
-          _buildSectionHeader('Mode Hors-Ligne & Synchronisation'),
+          // Section Mode Hors-Ligne & Synchronisation
+          _buildSectionHeader('Mode Hors-Ligne & Cache Local'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Activer le mode hors-ligne',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Text(
+                      'Consulter le catalogue, encaisser et imprimer même sans Internet. Les ventes sont automatiquement synchronisées dès le retour du réseau.',
+                      style: TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+                    ),
+                    value: settings.offlineModeEnabled,
+                    onChanged: (val) async {
+                      await settings.setOfflineModeEnabled(val);
+                      if (val && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Mode hors-ligne activé. Pensez à mettre en cache votre catalogue.'),
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const Divider(height: 20),
+
+                  // État du cache Catalogue
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Ventes en attente de sync :', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Catalogue en cache local :', style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text(
+                            settings.lastProductsCacheDate != null
+                                ? 'Mis à jour le ${DateFormat('dd/MM/yyyy HH:mm', 'fr_FR').format(settings.lastProductsCacheDate!)}'
+                                : 'Aucun produit en cache',
+                            style: const TextStyle(fontSize: 11.5, color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: settings.cachedProductsCount > 0 ? AppTheme.secondaryLight : AppTheme.backgroundColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.borderColor),
+                        ),
+                        child: Text(
+                          '${settings.cachedProductsCount} art.',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: settings.cachedProductsCount > 0 ? AppTheme.secondaryColor : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Bouton télécharger/rafraîchir catalogue
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isCachingCatalog
+                          ? null
+                          : () async {
+                              setState(() => _isCachingCatalog = true);
+                              try {
+                                final catalog = context.read<CatalogProvider>();
+                                await catalog.loadCatalog(force: true);
+                                await settings.cacheCatalog(catalog.products);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${catalog.products.length} produits mis en cache avec succès !'),
+                                      backgroundColor: AppTheme.secondaryColor,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Erreur lors de la mise en cache : $e'),
+                                      backgroundColor: AppTheme.errorColor,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) setState(() => _isCachingCatalog = false);
+                              }
+                            },
+                      icon: _isCachingCatalog
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.cloud_download_outlined, size: 18),
+                      label: Text(_isCachingCatalog ? 'Téléchargement...' : 'Télécharger tout le catalogue en local'),
+                    ),
+                  ),
+
+                  const Divider(height: 24),
+
+                  // Ventes en attente de synchronisation
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Ventes hors-ligne en attente :', style: TextStyle(fontWeight: FontWeight.w600)),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -379,7 +489,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
+
+                  // Bouton Synchroniser maintenant
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -389,14 +501,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: settings.offlineQueueCount == 0 || settings.isSyncing
                           ? null
                           : () async {
-                              final api = context.read<ApiService>();
-                              final ok = await settings.syncOfflineQueue(api);
+                              final connSync = context.read<ConnectivitySyncService>();
+                              final salesHistory = context.read<SalesHistoryProvider>();
+                              final ok = await connSync.syncNow(
+                                onSyncSuccess: () {
+                                  salesHistory.loadSales(force: true);
+                                  settings.refreshCounts();
+                                },
+                              );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(ok
-                                        ? 'Synchronisation réussie !'
-                                        : 'Échec de synchronisation. Vérifiez la connexion.'),
+                                        ? 'Ventes synchronisées avec le serveur avec succès !'
+                                        : 'Échec de la synchronisation. Vérifiez votre connexion Internet.'),
+                                    backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
                                   ),
                                 );
                               }
@@ -404,7 +523,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: settings.isSyncing
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                           : const Icon(Icons.sync),
-                      label: Text(settings.isSyncing ? 'Synchronisation...' : 'Synchroniser les ventes'),
+                      label: Text(settings.isSyncing ? 'Synchronisation...' : 'Synchroniser les ventes en attente'),
                     ),
                   ),
                 ],

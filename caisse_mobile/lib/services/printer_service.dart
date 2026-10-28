@@ -134,8 +134,19 @@ class PrinterService {
         marginAll: 1.5 * PdfPageFormat.mm,
       );
 
+      pw.ThemeData? unicodeTheme;
+      try {
+        final fontRegular = await PdfGoogleFonts.robotoRegular();
+        final fontBold = await PdfGoogleFonts.robotoBold();
+        unicodeTheme = pw.ThemeData.withFont(
+          base: fontRegular,
+          bold: fontBold,
+        );
+      } catch (_) {}
+
       doc.addPage(
         pw.Page(
+          theme: unicodeTheme,
           pageFormat: pageFormat,
           build: (pw.Context context) {
             return pw.Container(

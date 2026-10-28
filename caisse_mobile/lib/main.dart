@@ -7,6 +7,7 @@ import 'config/constants.dart';
 import 'services/storage_service.dart';
 import 'services/scanner_service.dart';
 import 'services/api_service.dart';
+import 'services/connectivity_sync_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/catalog_provider.dart';
 import 'providers/cart_provider.dart';
@@ -67,7 +68,10 @@ class CaisseApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => CatalogProvider(apiService: apiService),
+          create: (_) => CatalogProvider(
+            apiService: apiService,
+            storageService: storageService,
+          ),
         ),
         ChangeNotifierProvider(
           create: (_) => CartProvider(),
@@ -79,7 +83,16 @@ class CaisseApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => SalesHistoryProvider(apiService: apiService),
+          create: (_) => SalesHistoryProvider(
+            apiService: apiService,
+            storageService: storageService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ConnectivitySyncService(
+            apiService: apiService,
+            storageService: storageService,
+          ),
         ),
       ],
       child: MaterialApp(

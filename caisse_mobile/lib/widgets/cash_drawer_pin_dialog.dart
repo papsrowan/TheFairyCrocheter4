@@ -12,9 +12,9 @@ class CashDrawerPinDialog extends StatefulWidget {
   static Future<bool> verifyAndOpen(BuildContext context) async {
     final settings = Provider.of<TerminalSettingsProvider>(context, listen: false);
 
-    // Si le code PIN n'est pas activé, ouvrir directement
+    // Si le code PIN n'est pas activé, ouvrir directement avec le code configuré
     if (!settings.requireDrawerPin) {
-      final ok = await CashDrawerService.openDrawer();
+      final ok = await CashDrawerService.openDrawer(code: settings.cashDrawerPin);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -35,14 +35,18 @@ class CashDrawerPinDialog extends StatefulWidget {
     }
 
     // Afficher la boîte de dialogue de saisie du PIN (style Hardware Manager)
-    final bool? pinOk = await showDialog<bool>(
+    final String? enteredPin = await showDialog<String?>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const CashDrawerPinDialog(),
     );
 
-    if (pinOk == true) {
-      final ok = await CashDrawerService.openDrawer();
+    if (enteredPin != null && enteredPin.isNotEmpty) {
+      // Sauvegarder automatiquement comme code par défaut si différent
+      if (settings.cashDrawerPin != enteredPin) {
+        settings.setCashDrawerPin(enteredPin);
+      }
+      final ok = await CashDrawerService.openDrawer(code: enteredPin);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -94,22 +98,8 @@ class _CashDrawerPinDialogState extends State<CashDrawerPinDialog> {
   }
 
   void _checkPin() {
-    final settings = Provider.of<TerminalSettingsProvider>(context, listen: false);
-    final expectedPin = settings.cashDrawerPin.trim();
-
-    // Valide si le PIN correspond à celui configuré OU aux codes universels POS ZCS
-    final isValid = (_pin == expectedPin) ||
-        (expectedPin.isEmpty && (_pin == '123456' || _pin == '1234')) ||
-        (_pin == '888888') ||
-        (_pin == '000000');
-
-    if (isValid) {
-      Navigator.of(context).pop(true);
-    } else {
-      setState(() {
-        _errorMessage = 'Code incorrect';
-        _pin = '';
-      });
+    if (_pin.isNotEmpty) {
+      Navigator.of(context).pop(_pin);
     }
   }
 
@@ -255,7 +245,7 @@ class _CashDrawerPinDialogState extends State<CashDrawerPinDialog> {
                       width: 72,
                       height: 48,
                       child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
+                        onPressed: () => Navigator.of(context).pop(null),
                         style: TextButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),

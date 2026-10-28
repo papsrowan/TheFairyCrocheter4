@@ -48,7 +48,9 @@ class MainActivity : FlutterActivity() {
                     result.success(registeredActions.toList())
                 }
                 "openCashDrawer" -> {
-                    val opened = openPhysicalCashDrawer()
+                    val codeArg = call.argument<String>("code") ?: ""
+                    val code = if (codeArg.isNotBlank()) codeArg else "799270"
+                    val opened = openPhysicalCashDrawer(code)
                     result.success(opened)
                 }
                 "printRawEscPos" -> {
@@ -161,10 +163,30 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
-    private fun openPhysicalCashDrawer(): Boolean {
-        var success = false
+    private fun populatePasswordExtras(intent: Intent, code: String) {
+        if (code.isBlank()) return
+        intent.putExtra("password", code)
+        intent.putExtra("pwd", code)
+        intent.putExtra("pin", code)
+        intent.putExtra("code", code)
+        intent.putExtra("key", code)
+        intent.putExtra("pass", code)
+        intent.putExtra("psw", code)
+        intent.putExtra("cashbox_password", code)
+        intent.putExtra("cashbox_code", code)
+        intent.putExtra("cashBoxPassword", code)
+        intent.putExtra("cashboxPassword", code)
+        intent.putExtra("drawer_password", code)
+        intent.putExtra("drawerPassword", code)
+        intent.putExtra("input_password", code)
+        intent.putExtra("inputPassword", code)
+    }
 
-        // 1. Broadcasts Android standards & constructeurs POS (ZCS, Sunmi, Urovo, iMin, etc.)
+    private fun openPhysicalCashDrawer(code: String): Boolean {
+        var success = false
+        val finalCode = if (code.isNotBlank()) code else "799270"
+        android.util.Log.i("POS_DRAWER", "Attempting to open cash drawer with code: $finalCode")
+
         val drawerActions = listOf(
             "com.zcs.action.OPEN_DRAWER",
             "com.zcs.action.CASH_BOX",
@@ -177,28 +199,76 @@ class MainActivity : FlutterActivity() {
             "com.urovo.cashdrawer.OPEN",
             "device.action.OPEN_DRAWER",
             "com.android.cashdrawer.open",
-            "android.intent.action.OPEN_DRAWER"
+            "android.intent.action.OPEN_DRAWER",
+            "com.zcs.action.OPEN_CASH_DRAWER",
+            "com.zcs.action.OPEN_CASHBOX",
+            "com.zcs.action.DRAWER_KICK",
+            "com.zcs.action.DRAWER_OPEN",
+            "com.zcs.action.DRAWER",
+            "com.zcs.action.CASHBOX",
+            "action.open.drawer",
+            "com.zcs.zcshardwaremanager.action.OPEN_CASHBOX",
+            "com.zcs.zcshardwaremanager.CASHBOX",
+            "com.zcs.zsf.action.OPEN_DRAWER",
+            "com.zcs.customized.action.OPEN_DRAWER"
         )
+
+        // 1. Broadcasts globaux avec toutes les clés de mot de passe
         for (action in drawerActions) {
             try {
-                sendBroadcast(Intent(action))
+                val intent = Intent(action)
+                populatePasswordExtras(intent, finalCode)
+                sendBroadcast(intent)
                 success = true
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("POS_DRAWER", "Broadcast $action failed: ${e.message}")
+            }
         }
 
-        // 2. Écriture directe des octets ESC/POS (Pin 2, Pin 5 et Real-time) sur les nœuds périphériques & ports séries
+        // 2. Recherche et ciblage explicite des packages ZCS / Hardware Manager installés
+        try {
+            val pm = packageManager
+            val packages = pm.getInstalledPackages(0)
+            for (pkg in packages) {
+                val pName = pkg.packageName.lowercase()
+                if (pName.contains("hardware") || pName.contains("cashbox") || pName.contains("drawer") || pName.contains("pos") || pName.contains("zcs")) {
+                    android.util.Log.i("POS_DRAWER", "Found POS/Hardware package: ${pkg.packageName}")
+                    for (action in drawerActions) {
+                        try {
+                            val targetedIntent = Intent(action)
+                            targetedIntent.setPackage(pkg.packageName)
+                            populatePasswordExtras(targetedIntent, finalCode)
+                            sendBroadcast(targetedIntent)
+
+                            // Tenter également en tant que service d'arrière-plan
+                            try {
+                                startService(targetedIntent)
+                            } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("POS_DRAWER", "Package search failed: ${e.message}")
+        }
+
+        // 3. Déclenchement de l'impulsion ESC/POS RJ12 via le circuit de l'imprimante thermique interne
+        val kickBytes = byteArrayOf(
+            0x1B, 0x70, 0x00, 0x19, 0xFA.toByte(), // ESC p 0 25 250 (Pin 2 kick)
+            0x1B, 0x70, 0x01, 0x19, 0xFA.toByte(), // ESC p 1 25 250 (Pin 5 kick)
+            0x10, 0x14, 0x01, 0x00, 0x05            // DLE DC4 1 0 5 (Real-time pulse)
+        )
+        try {
+            printDirectHardware(kickBytes)
+        } catch (_: Exception) {}
+
+        // 4. Tentative d'écriture directe (si les permissions SELinux le permettent)
         val candidateDevices = listOf(
             "/dev/cash_drawer",
             "/dev/cashbox",
             "/dev/drawer",
             "/dev/printer",
             "/dev/usb/lp0"
-        )
-        // Combinaison des impulsions standards RJ12 : Pin 2 (0x00), Pin 5 (0x01) et Real-time kick (0x10, 0x14)
-        val kickBytes = byteArrayOf(
-            0x1B, 0x70, 0x00, 0x19, 0xFA.toByte(), // ESC p 0 25 250
-            0x1B, 0x70, 0x01, 0x19, 0xFA.toByte(), // ESC p 1 25 250
-            0x10, 0x14, 0x01, 0x00, 0x05            // DLE DC4 1 0 5
         )
         for (devPath in candidateDevices) {
             try {
@@ -233,6 +303,17 @@ class MainActivity : FlutterActivity() {
                 intent.putExtra("data", bytes)
                 intent.putExtra("bytes", bytes)
                 sendBroadcast(intent)
+            } catch (_: Exception) {}
+        }
+
+        val zcsPrintPackages = listOf("com.zcs.customized", "com.zcs.zcshardwaremanager", "com.zcs.zsf")
+        for (pkg in zcsPrintPackages) {
+            try {
+                val targeted = Intent("com.zcs.action.PRINT")
+                targeted.setPackage(pkg)
+                targeted.putExtra("data", bytes)
+                targeted.putExtra("bytes", bytes)
+                sendBroadcast(targeted)
             } catch (_: Exception) {}
         }
 

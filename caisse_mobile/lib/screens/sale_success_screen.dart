@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
 import '../providers/cart_provider.dart';
+import '../providers/terminal_settings_provider.dart';
 import '../services/printer_service.dart';
+import '../services/cash_drawer_service.dart';
 
 class SaleSuccessScreen extends StatefulWidget {
   final ReceiptData receiptData;
@@ -116,20 +118,49 @@ class _SaleSuccessScreenState extends State<SaleSuccessScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundColor,
+                    color: d.numeroVente.startsWith('OFF-') ? const Color(0xFFFEF3C7) : AppTheme.backgroundColor,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.borderColor),
+                    border: Border.all(
+                      color: d.numeroVente.startsWith('OFF-') ? const Color(0xFFF59E0B) : AppTheme.borderColor,
+                    ),
                   ),
                   child: Text(
                     d.numeroVente,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.primaryColor,
+                      color: d.numeroVente.startsWith('OFF-') ? const Color(0xFFB45309) : AppTheme.primaryColor,
                     ),
                   ),
                 ),
+
+                if (d.numeroVente.startsWith('OFF-')) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFBBF24)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_off, size: 14, color: Color(0xFFD97706)),
+                        SizedBox(width: 5),
+                        Text(
+                          'Mode hors-ligne • En attente de synchro',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 16),
 
@@ -164,20 +195,40 @@ class _SaleSuccessScreenState extends State<SaleSuccessScreen> {
 
                 const Spacer(),
 
-                // Bouton d'impression du ticket
-                OutlinedButton.icon(
-                  onPressed: _isPrinting ? null : _printTicket,
-                  icon: _isPrinting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.print_outlined),
-                  label: Text(_isPrinting ? 'Impression...' : 'Imprimer le ticket 58mm'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 52),
-                  ),
+                // Boutons d'actions : Ouvrir caisse + Imprimer ticket
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final settings = context.read<TerminalSettingsProvider>();
+                          CashDrawerService.openDrawer(code: settings.cashDrawerPin);
+                        },
+                        icon: const Icon(Icons.point_of_sale, size: 18),
+                        label: const Text('Ouvrir caisse'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 50),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isPrinting ? null : _printTicket,
+                        icon: _isPrinting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.print_outlined, size: 18),
+                        label: Text(_isPrinting ? '...' : 'Imprimer'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 50),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 12),

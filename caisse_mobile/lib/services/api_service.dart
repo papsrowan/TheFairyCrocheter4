@@ -187,12 +187,34 @@ class ApiService {
 
   // ─── SYNCHRONISATION OFFLINE ─────────────────────────────────────────────────
 
+  Future<bool> checkHealth() async {
+    try {
+      final res = await _dio.get(
+        '/api/health',
+        options: Options(
+          sendTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> syncOfflineSales(List<Map<String, dynamic>> actions) async {
     if (actions.isEmpty) return true;
     try {
+      final sanitizedActions = actions.map((a) => {
+        'id': a['id'] as String,
+        'type': a['type'] as String? ?? 'vente',
+        'payload': a['payload'],
+        'createdAt': a['createdAt'] as String? ?? DateTime.now().toUtc().toIso8601String(),
+      }).toList();
+
       final res = await _dio.post(
         '/api/sync',
-        data: {'actions': actions},
+        data: {'actions': sanitizedActions},
       );
       return res.statusCode == 200;
     } catch (_) {

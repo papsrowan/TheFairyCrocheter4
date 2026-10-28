@@ -14,6 +14,7 @@ import '../providers/terminal_settings_provider.dart';
 import '../services/scanner_service.dart';
 import '../services/printer_service.dart';
 import '../services/api_service.dart';
+import '../services/connectivity_sync_service.dart';
 import '../services/feedback_service.dart';
 import '../widgets/universal_scanner_listener.dart';
 import '../widgets/product_card.dart';
@@ -354,6 +355,60 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
               onPressed: () => CashDrawerPinDialog.verifyAndOpen(context),
             ),
 
+            // Indicateur de synchronisation / Réseau
+            Consumer<ConnectivitySyncService>(
+              builder: (consumerCtx, conn, child) {
+                if (conn.isSyncing) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  );
+                }
+                if (conn.hasPendingSales) {
+                  return IconButton(
+                    tooltip: 'Synchroniser ${conn.pendingSalesCount} vente(s) hors-ligne',
+                    icon: Badge(
+                      label: Text('${conn.pendingSalesCount}'),
+                      backgroundColor: const Color(0xFFF59E0B),
+                      child: const Icon(Icons.cloud_upload_outlined, color: Color(0xFFD97706)),
+                    ),
+                    onPressed: () async {
+                      final salesHistory = context.read<SalesHistoryProvider>();
+                      final settings = context.read<TerminalSettingsProvider>();
+                      final messenger = ScaffoldMessenger.of(context);
+                      final ok = await conn.syncNow(onSyncSuccess: () {
+                        salesHistory.loadSales(force: true);
+                        settings.refreshCounts();
+                      });
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? 'Ventes hors-ligne synchronisées avec succès !'
+                              : 'Échec de la synchronisation. Vérifiez la connexion.'),
+                          backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+                        ),
+                      );
+                    },
+                  );
+                }
+                if (!conn.isOnline) {
+                  return IconButton(
+                    tooltip: 'Mode hors-ligne actif (Pas de connexion)',
+                    icon: const Icon(Icons.cloud_off, color: Color(0xFFDC2626)),
+                    onPressed: () => conn.checkConnection(),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+
             // Paramètres
             IconButton(
               icon: const Icon(Icons.settings_outlined),
@@ -431,6 +486,23 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
   Widget _buildCatalogTab(CatalogProvider catalog) {
     return Column(
       children: [
+        if (catalog.isOffline)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            color: const Color(0xFFFEF3C7),
+            child: const Row(
+              children: [
+                Icon(Icons.cloud_off, size: 14, color: Color(0xFFB45309)),
+                SizedBox(width: 6),
+                Text(
+                  'Mode hors-ligne : Catalogue local chargé',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+                ),
+              ],
+            ),
+          ),
+
         // Barre de recherche et statut scanner
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -795,6 +867,52 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
 
         const Divider(height: 1),
 
+        // Bannière des ventes en attente de synchronisation
+        if (salesProvider.sales.any((s) => s.isOfflinePending)) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: const Color(0xFFFFFBEB),
+            child: Row(
+              children: [
+                const Icon(Icons.sync_problem, size: 16, color: Color(0xFFD97706)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${salesProvider.sales.where((s) => s.isOfflinePending).length} vente(s) enregistrée(s) hors-ligne en attente',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+                  ),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  onPressed: () async {
+                    final conn = context.read<ConnectivitySyncService>();
+                    final ok = await conn.syncNow(onSyncSuccess: () {
+                      salesProvider.loadSales(force: true);
+                      settings.refreshCounts();
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? 'Ventes synchronisées avec succès !'
+                              : 'Impossible de synchroniser. Connexion requise.'),
+                          backgroundColor: ok ? AppTheme.secondaryColor : AppTheme.errorColor,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Synchroniser', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+        ],
+
         // Liste des ventes avec pull-to-refresh
         Expanded(
           child: salesProvider.isLoading && salesProvider.sales.isEmpty
@@ -1007,7 +1125,11 @@ class _PosScreenState extends State<PosScreen> with SingleTickerProviderStateMix
     Color fg;
     String label;
 
-    if (sale.isAnnulee) {
+    if (sale.isOfflinePending) {
+      bg = const Color(0xFFFEF3C7);
+      fg = const Color(0xFFB45309);
+      label = 'En attente de synchro';
+    } else if (sale.isAnnulee) {
       bg = const Color(0xFFFEE2E2);
       fg = const Color(0xFF991B1B);
       label = 'Annulée';

@@ -5,9 +5,11 @@ class CashDrawerService {
       MethodChannel('com.thefairycrocheter.pos/scanner_config');
 
   /// Déclenche l'impulsion électrique RJ12 pour ouvrir le tiroir-caisse physique
-  static Future<bool> openDrawer() async {
+  static Future<bool> openDrawer({String? code}) async {
     try {
-      final res = await _channel.invokeMethod<bool>('openCashDrawer');
+      final res = await _channel.invokeMethod<bool>('openCashDrawer', {
+        'code': code ?? '',
+      });
       return res ?? true;
     } catch (_) {
       return false;

@@ -1,9 +1,12 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
+import '../services/storage_service.dart';
 
 class CatalogProvider extends ChangeNotifier {
   final ApiService apiService;
+  final StorageService storageService;
 
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
@@ -11,6 +14,7 @@ class CatalogProvider extends ChangeNotifier {
   String? _selectedCategory;
   String _searchQuery = '';
   bool _isLoading = false;
+  bool _isOffline = false;
   String? _errorMessage;
 
   List<Product> get products => _products;
@@ -19,12 +23,37 @@ class CatalogProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
+  bool get isOffline => _isOffline;
   String? get errorMessage => _errorMessage;
 
-  CatalogProvider({required this.apiService});
+  CatalogProvider({
+    required this.apiService,
+    required this.storageService,
+  }) {
+    _initFromCache();
+  }
+
+  void _initFromCache() {
+    final cached = storageService.getCachedProducts();
+    if (cached.isNotEmpty) {
+      _products = cached;
+      _rebuildCategories();
+      _applyFilters();
+    }
+  }
+
+  void _rebuildCategories() {
+    final cats = <String>{};
+    for (final p in _products) {
+      if (p.categorieNom != null && p.categorieNom!.isNotEmpty) {
+        cats.add(p.categorieNom!);
+      }
+    }
+    _categories = cats;
+  }
 
   Future<void> loadCatalog({bool force = false}) async {
-    if (_products.isNotEmpty && !force) return;
+    if (_products.isNotEmpty && !force && !_isOffline) return;
 
     _isLoading = true;
     _errorMessage = null;
@@ -33,22 +62,27 @@ class CatalogProvider extends ChangeNotifier {
     try {
       final list = await apiService.searchProducts(all: true, limit: 100);
       _products = list;
+      _isOffline = false;
 
-      // Extraire les catégories uniques
-      final cats = <String>{};
-      for (final p in list) {
-        if (p.categorieNom != null && p.categorieNom!.isNotEmpty) {
-          cats.add(p.categorieNom!);
-        }
-      }
-      _categories = cats;
+      // Sauvegarde automatique du cache local
+      await storageService.saveCachedProducts(list);
 
+      _rebuildCategories();
       _applyFilters();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      final cached = storageService.getCachedProducts();
+      if (cached.isNotEmpty) {
+        _products = cached;
+        _isOffline = true;
+        _rebuildCategories();
+        _applyFilters();
+        _errorMessage = null;
+      } else {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      }
       notifyListeners();
     }
   }
@@ -105,5 +139,36 @@ class CatalogProvider extends ChangeNotifier {
     } catch (_) {}
 
     return null;
+  }
+
+  Future<void> decrementStock(String produitId, String? varianteId, int qty) async {
+    // 1. Décrémenter dans le stockage persistant
+    await storageService.decrementLocalStock(produitId, varianteId, qty);
+
+    // 2. Mettre à jour en mémoire vive
+    final pIdx = _products.indexWhere((p) => p.id == produitId);
+    if (pIdx != -1) {
+      final p = _products[pIdx];
+      List<VarianteCouleur> updatedVars = p.variantes;
+      if (varianteId != null) {
+        updatedVars = p.variantes.map((v) {
+          if (v.id == varianteId) {
+            return v.copyWith(stockActuel: math.max(0, v.stockActuel - qty));
+          }
+          return v;
+        }).toList();
+      }
+      _products[pIdx] = p.copyWith(
+        stockActuel: math.max(0, p.stockActuel - qty),
+        variantes: updatedVars,
+      );
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
+  void reloadFromCache() {
+    _initFromCache();
+    notifyListeners();
   }
 }

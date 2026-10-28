@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
 import '../providers/cart_provider.dart';
+import '../providers/catalog_provider.dart';
+import '../providers/sales_history_provider.dart';
 import '../providers/terminal_settings_provider.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -726,16 +728,26 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         monnaieRendue: cart.modePaiement == 'ESPECES' ? cart.monnaieRendue : null,
                       );
 
-                      // Déclencher l'ouverture automatique du tiroir-caisse RJ12 si paiement espèces
-                      if (settings.autoOpenDrawer &&
-                          (cart.modePaiement == 'ESPECES' || (cart.payerPlusTard && cart.paiementPartiel))) {
-                        CashDrawerService.openDrawer();
+                      // Déclencher l'ouverture automatique de la caisse à chaque encaissement si activé
+                      if (settings.autoOpenDrawer) {
+                        CashDrawerService.openDrawer(code: settings.cashDrawerPin);
                       }
+
+                      final catalogProvider = context.read<CatalogProvider>();
+                      final salesHistory = context.read<SalesHistoryProvider>();
 
                       final saleRes = await cart.submitSale(
                         apiService: apiService,
                         storageService: storageService,
+                        onDecrementStock: (produitId, varianteId, qty) {
+                          catalogProvider.decrementStock(produitId, varianteId, qty);
+                        },
                       );
+
+                      if (saleRes.isOffline) {
+                        salesHistory.refreshWithOfflineSales();
+                        settings.refreshCounts();
+                      }
 
                       final finalReceipt = ReceiptData(
                         numeroVente: saleRes.numero,

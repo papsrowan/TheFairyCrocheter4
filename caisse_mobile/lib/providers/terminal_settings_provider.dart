@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import '../services/storage_service.dart';
 import '../services/scanner_service.dart';
 import '../services/api_service.dart';
+import '../models/product.dart';
+import '../models/sale.dart';
 
 class TerminalSettingsProvider extends ChangeNotifier {
   final StorageService storageService;
@@ -15,6 +17,7 @@ class TerminalSettingsProvider extends ChangeNotifier {
   late String _printerMode;
   late String _scannerMode;
   late String _customIntentAction;
+  late bool _offlineModeEnabled;
   int _offlineQueueCount = 0;
   bool _isSyncing = false;
 
@@ -26,8 +29,12 @@ class TerminalSettingsProvider extends ChangeNotifier {
   String get printerMode => _printerMode;
   String get scannerMode => _scannerMode;
   String get customIntentAction => _customIntentAction;
+  bool get offlineModeEnabled => _offlineModeEnabled;
   int get offlineQueueCount => _offlineQueueCount;
   bool get isSyncing => _isSyncing;
+  DateTime? get lastProductsCacheDate => storageService.getLastProductsCacheDate();
+  int get cachedProductsCount => storageService.getCachedProducts().length;
+  int get cachedSalesCount => storageService.getCachedSales().length;
 
   TerminalSettingsProvider({
     required this.storageService,
@@ -45,12 +52,18 @@ class TerminalSettingsProvider extends ChangeNotifier {
     _printerMode = storageService.getPrinterMode();
     _scannerMode = storageService.getScannerMode();
     _customIntentAction = storageService.getCustomIntentAction();
+    _offlineModeEnabled = storageService.getOfflineModeEnabled();
     _updateOfflineCount();
     notifyListeners();
   }
 
   void _updateOfflineCount() {
     _offlineQueueCount = storageService.getOfflineQueue().length;
+  }
+
+  void refreshCounts() {
+    _updateOfflineCount();
+    notifyListeners();
   }
 
   Future<void> setBaseUrl(String url) async {
@@ -101,6 +114,22 @@ class TerminalSettingsProvider extends ChangeNotifier {
     if (_customIntentAction.isNotEmpty) {
       await scannerService.registerCustomAction(_customIntentAction);
     }
+    notifyListeners();
+  }
+
+  Future<void> setOfflineModeEnabled(bool val) async {
+    _offlineModeEnabled = val;
+    await storageService.setOfflineModeEnabled(val);
+    notifyListeners();
+  }
+
+  Future<void> cacheCatalog(List<Product> products) async {
+    await storageService.saveCachedProducts(products);
+    notifyListeners();
+  }
+
+  Future<void> cacheSales(List<VenteItem> sales) async {
+    await storageService.saveCachedSales(sales);
     notifyListeners();
   }
 

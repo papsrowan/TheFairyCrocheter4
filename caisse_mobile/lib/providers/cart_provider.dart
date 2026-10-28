@@ -295,6 +295,7 @@ class CartProvider extends ChangeNotifier {
   Future<SaleResponse> submitSale({
     required ApiService apiService,
     required StorageService storageService,
+    Function(String produitId, String? varianteId, int qty)? onDecrementStock,
   }) async {
     if (_items.isEmpty) {
       throw Exception('Le panier est vide');
@@ -327,15 +328,54 @@ class CartProvider extends ChangeNotifier {
       notifyListeners();
       return response;
     } catch (e) {
-      // En cas de panne réseau, sauvegarder dans la queue offline
-      await storageService.addToOfflineQueue(payload);
+      final now = DateTime.now();
+      final offlineId = 'offline_${now.millisecondsSinceEpoch}';
+      final numeroOffline = 'OFF-${now.year}-${now.millisecondsSinceEpoch.toString().substring(7)}';
+
+      final extraInfo = {
+        'id': offlineId,
+        'numero': numeroOffline,
+        'createdAt': now.toIso8601String(),
+        'total': total,
+        'sousTotal': sousTotal,
+        'totalRemise': totalRemises,
+        'modePaiement': _payerPlusTard ? 'CREDIT' : _modePaiement,
+        'clientNom': _client?.nom,
+        'clientTelephone': _client?.telephone,
+        'lignes': _items.map((i) => {
+          'id': 'ligne_${now.millisecondsSinceEpoch}_${i.produitId}',
+          'produitId': i.produitId,
+          'varianteId': i.varianteId,
+          'produitNom': i.nom,
+          'couleur': i.couleur,
+          'codeBarres': i.codeBarres,
+          'quantite': i.quantite,
+          'prixUnitaire': i.prixUnitaire,
+          'sousTotal': i.sousTotal,
+          'remise': i.remise,
+          'total': i.total,
+        }).toList(),
+      };
+
+      // 1. Sauvegarder dans la queue offline avec extraInfo
+      await storageService.addToOfflineQueue(payload, extraInfo: extraInfo);
+
+      // 2. Décrémenter le stock local pour chaque article
+      for (final item in _items) {
+        await storageService.decrementLocalStock(item.produitId, item.varianteId, item.quantite);
+        if (onDecrementStock != null) {
+          onDecrementStock(item.produitId, item.varianteId, item.quantite);
+        }
+      }
+
       _isSubmitting = false;
       notifyListeners();
 
-      // Retourner une confirmation locale temporaire
+      // 3. Retourner une confirmation locale temporaire
       return SaleResponse(
-        id: 'offline_${DateTime.now().millisecondsSinceEpoch}',
-        numero: 'VTE-OFFLINE-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+        id: offlineId,
+        numero: numeroOffline,
+        isOffline: true,
       );
     }
   }
