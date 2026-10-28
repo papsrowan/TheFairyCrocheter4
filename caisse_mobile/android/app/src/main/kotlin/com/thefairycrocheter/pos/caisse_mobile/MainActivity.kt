@@ -9,6 +9,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import com.zcs.sdk.DriverManager
+import com.zcs.sdk.Printer
 
 class MainActivity : FlutterActivity() {
     private val SCANNER_EVENT_CHANNEL = "com.thefairycrocheter.pos/scanner_events"
@@ -186,6 +188,25 @@ class MainActivity : FlutterActivity() {
         var success = false
         val finalCode = if (code.isNotBlank()) code else "799270"
         android.util.Log.i("POS_DRAWER", "Attempting to open cash drawer with code: $finalCode")
+
+        // 1. APPEL DIRECT AU DRIVER MATÉRIEL DU SDK ZCS OFFICIEL (Identique à Hardware Manager)
+        try {
+            val driverManager = DriverManager.getInstance()
+            val printer = driverManager.printer
+            if (printer != null) {
+                driverManager.singleThreadExecutor.execute {
+                    try {
+                        val result = printer.openBox()
+                        android.util.Log.i("POS_DRAWER", "ZCS SDK printer.openBox() returned: $result")
+                    } catch (e: Exception) {
+                        android.util.Log.e("POS_DRAWER", "Error calling ZCS printer.openBox(): ${e.message}")
+                    }
+                }
+                success = true
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("POS_DRAWER", "ZCS SDK direct open failed, falling back to broadcast: ${e.message}")
+        }
 
         val drawerActions = listOf(
             "com.zcs.action.OPEN_DRAWER",
